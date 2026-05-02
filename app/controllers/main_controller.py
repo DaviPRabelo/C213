@@ -16,8 +16,21 @@ from app.models.system_model import (
     simulate_closed_loop,
 )
 from app.views.main_window import (
-    MainWindow, ACCENT, ACCENT2, ACCENT3, BORDER, TEXT_MUTED, CARD_BG
+    MainWindow, DARK_PALETTE, LIGHT_PALETTE, _current_palette,
+    _build_stylesheet, set_palette
 )
+
+# helpers de cor dinamica: sempre leem do tema ativo
+def _c(key):
+    from app.views import main_window as _mw
+    return _mw._current_palette[key]
+
+def ACCENT():    return _c('ACCENT')
+def ACCENT2():   return _c('ACCENT2')
+def ACCENT3():   return _c('ACCENT3')
+def BORDER():    return _c('BORDER')
+def TEXT_MUTED(): return _c('MUTED')
+def CARD_BG():   return _c('CARD')
 
 
 # ── Formatadores que toleram None ───────────────────────────────────────────
@@ -111,22 +124,22 @@ class MainController(QObject):
 
         ax2 = ax.twinx()
         ax2.set_facecolor("none")
-        ax2.tick_params(colors=TEXT_MUTED, labelsize=9)
+        ax2.tick_params(colors=TEXT_MUTED(), labelsize=9)
         for spine in ax2.spines.values():
-            spine.set_edgecolor(BORDER)
+            spine.set_edgecolor(BORDER())
 
-        line_y = ax.plot(t, y, color=ACCENT, linewidth=1.8, label="Saída y(t)")[0]
-        line_u = ax2.plot(t, u, color=ACCENT3, linewidth=1.2, linestyle='--',
+        line_y = ax.plot(t, y, color=ACCENT(), linewidth=1.8, label="Saída y(t)")[0]
+        line_u = ax2.plot(t, u, color=ACCENT3(), linewidth=1.2, linestyle='--',
                           alpha=0.8, label="Entrada u(t)")[0]
 
-        ax.set_xlabel("Tempo", color=TEXT_MUTED)
-        ax.set_ylabel("Saída", color=ACCENT)
-        ax2.set_ylabel("Entrada", color=ACCENT3)
-        ax.set_title("Dados do Dataset", color=ACCENT, fontsize=12, fontweight='bold')
+        ax.set_xlabel("Tempo", color=TEXT_MUTED())
+        ax.set_ylabel("Saída", color=ACCENT())
+        ax2.set_ylabel("Entrada", color=ACCENT3())
+        ax.set_title("Dados do Dataset", color=ACCENT(), fontsize=12, fontweight='bold')
 
         ax.legend(handles=[line_y, line_u],
-                  facecolor=CARD_BG, edgecolor=BORDER,
-                  labelcolor=TEXT_MUTED, fontsize=9)
+                  facecolor=CARD_BG(), edgecolor=BORDER(),
+                  labelcolor=TEXT_MUTED(), fontsize=9)
 
         canvas.figure.tight_layout(pad=2)
         canvas.draw()
@@ -166,7 +179,7 @@ class MainController(QObject):
 
         # Sugere λ inicial = θ (regra prática IMC)
         if r['theta'] > 0:
-            self.view.tab_pid.spin_lam.setValue(max(0.001, r['theta']))
+            self.view.tab_pid.set_lambda(max(0.001, r['theta']))
 
     def _plot_identification(self):
         canvas = self.view.tab_ident.canvas
@@ -177,23 +190,23 @@ class MainController(QObject):
         y_real  = self._data['output']
         y_model = self._ident['y_model']
 
-        ax.plot(t, y_real,  color=ACCENT,  linewidth=1.8, label="Dados reais")
-        ax.plot(t, y_model, color=ACCENT2, linewidth=1.8, linestyle='--',
+        ax.plot(t, y_real,  color=ACCENT(),  linewidth=1.8, label="Dados reais")
+        ax.plot(t, y_model, color=ACCENT2(), linewidth=1.8, linestyle='--',
                 label="Modelo FOPDT (Smith)")
 
         # Marca o instante do degrau
         if self._ident['t_step'] > t[0]:
-            ax.axvline(self._ident['t_step'], color=ACCENT3, linewidth=0.8,
+            ax.axvline(self._ident['t_step'], color=ACCENT3(), linewidth=0.8,
                        linestyle=':', alpha=0.7, label=f"Degrau t={self._ident['t_step']:.1f}")
 
         r = self._ident
         info = f"K={r['K']:.3f}  τ={r['tau']:.3f}  θ={r['theta']:.3f}  EQM={r['eqm']:.5f}"
         ax.set_title(f"Identificação Smith  —  {info}",
-                     color=ACCENT, fontsize=11, fontweight='bold')
-        ax.set_xlabel("Tempo", color=TEXT_MUTED)
-        ax.set_ylabel("Amplitude", color=TEXT_MUTED)
-        ax.legend(facecolor=CARD_BG, edgecolor=BORDER,
-                  labelcolor=TEXT_MUTED, fontsize=9)
+                     color=ACCENT(), fontsize=11, fontweight='bold')
+        ax.set_xlabel("Tempo", color=TEXT_MUTED())
+        ax.set_ylabel("Amplitude", color=TEXT_MUTED())
+        ax.legend(facecolor=CARD_BG(), edgecolor=BORDER(),
+                  labelcolor=TEXT_MUTED(), fontsize=9)
 
         canvas.figure.tight_layout(pad=2)
         canvas.draw()
@@ -204,10 +217,9 @@ class MainController(QObject):
     # 3. Sintonia PID
     # ──────────────────────────────────────────────────────────────────────
     def _on_method_changed(self):
-        t_pid = self.view.tab_pid
-        is_method = t_pid.radio_method.isChecked()
-        lam_ok = is_method and t_pid.combo_method.currentText() == "IMC"
-        t_pid.spin_lam.setEnabled(lam_ok)
+        # A lógica de enable/disable do λ já está na view (_on_mode_changed).
+        # O controller não precisa duplicá-la.
+        pass
 
     def _on_tune(self):
         if self._ident is None:
@@ -274,13 +286,13 @@ class MainController(QObject):
         y = self._cl_result['output']
         m = self._cl_result['metrics']
 
-        ax.plot(t, y, color=ACCENT, linewidth=2, label=f"Saída — {method_name}")
-        ax.axhline(setpoint, color=ACCENT2, linewidth=1.2, linestyle='--',
+        ax.plot(t, y, color=ACCENT(), linewidth=2, label=f"Saída — {method_name}")
+        ax.axhline(setpoint, color=ACCENT2(), linewidth=1.2, linestyle='--',
                    label=f"SetPoint = {setpoint:.2f}")
 
         # Faixa ±2%
         ax.fill_between(t, setpoint * 0.98, setpoint * 1.02,
-                        color=ACCENT2, alpha=0.08)
+                        color=ACCENT2(), alpha=0.08)
 
         # Garante limites antes de pegar ax.get_ylim()
         canvas.draw_idle()
@@ -288,10 +300,14 @@ class MainController(QObject):
         text_y = y_lo + (y_hi - y_lo) * 0.02
 
         if m['tr'] is not None:
-            ax.axvline(m['tr'], color=ACCENT3, linewidth=0.8,
-                       linestyle=':', alpha=0.8)
-            ax.text(m['tr'], text_y, f" tᵣ={m['tr']:.1f}",
-                    color=ACCENT3, fontsize=8)
+            # tr é uma duração (t90% - t10%); precisamos do instante absoluto t90%
+            idx_90 = np.where(y / setpoint >= 0.9)[0] if setpoint != 0 else []
+            t_tr = float(t[idx_90[0]]) if len(idx_90) > 0 else None
+            if t_tr is not None:
+                ax.axvline(t_tr, color=ACCENT3(), linewidth=0.8,
+                           linestyle=':', alpha=0.8)
+                ax.text(t_tr, text_y, f" tᵣ={m['tr']:.1f}",
+                        color=ACCENT3(), fontsize=8)
 
         if m['ts'] is not None:
             ax.axvline(m['ts'], color='#d2a8ff', linewidth=0.8,
@@ -300,11 +316,11 @@ class MainController(QObject):
                     color='#d2a8ff', fontsize=8)
 
         ax.set_title(f"Resposta Malha Fechada — {method_name}",
-                     color=ACCENT, fontsize=11, fontweight='bold')
-        ax.set_xlabel("Tempo", color=TEXT_MUTED)
-        ax.set_ylabel("Amplitude", color=TEXT_MUTED)
-        ax.legend(facecolor=CARD_BG, edgecolor=BORDER,
-                  labelcolor=TEXT_MUTED, fontsize=9)
+                     color=ACCENT(), fontsize=11, fontweight='bold')
+        ax.set_xlabel("Tempo", color=TEXT_MUTED())
+        ax.set_ylabel("Amplitude", color=TEXT_MUTED())
+        ax.legend(facecolor=CARD_BG(), edgecolor=BORDER(),
+                  labelcolor=TEXT_MUTED(), fontsize=9)
 
         canvas.figure.tight_layout(pad=2)
         canvas.draw()
@@ -325,16 +341,16 @@ class MainController(QObject):
         ax_ol = canvas_ol.ax
 
         t  = self._data['time']
-        ax_ol.plot(t, self._data['output'], color=ACCENT,  linewidth=1.8,
+        ax_ol.plot(t, self._data['output'], color=ACCENT(),  linewidth=1.8,
                    label="Dados reais")
-        ax_ol.plot(t, self._ident['y_model'], color=ACCENT2, linewidth=1.6,
+        ax_ol.plot(t, self._ident['y_model'], color=ACCENT2(), linewidth=1.6,
                    linestyle='--', label="Modelo FOPDT")
         ax_ol.set_title(f"Malha Aberta — Smith (EQM={self._ident['eqm']:.5f})",
-                        color=ACCENT, fontsize=10, fontweight='bold')
-        ax_ol.set_xlabel("Tempo", color=TEXT_MUTED)
-        ax_ol.set_ylabel("Amplitude", color=TEXT_MUTED)
-        ax_ol.legend(facecolor=CARD_BG, edgecolor=BORDER,
-                     labelcolor=TEXT_MUTED, fontsize=9)
+                        color=ACCENT(), fontsize=10, fontweight='bold')
+        ax_ol.set_xlabel("Tempo", color=TEXT_MUTED())
+        ax_ol.set_ylabel("Amplitude", color=TEXT_MUTED())
+        ax_ol.legend(facecolor=CARD_BG(), edgecolor=BORDER(),
+                     labelcolor=TEXT_MUTED(), fontsize=9)
         canvas_ol.figure.tight_layout(pad=2)
         canvas_ol.draw()
 
@@ -348,18 +364,18 @@ class MainController(QObject):
         sp   = self.view.tab_pid.get_setpoint()
         method = self._pid_params['method'] if self._pid_params else "PID"
 
-        ax_cl.plot(t_cl, y_cl, color=ACCENT, linewidth=2, label=f"{method}")
-        ax_cl.axhline(sp, color=ACCENT2, linewidth=1.2, linestyle='--',
+        ax_cl.plot(t_cl, y_cl, color=ACCENT(), linewidth=2, label=f"{method}")
+        ax_cl.axhline(sp, color=ACCENT2(), linewidth=1.2, linestyle='--',
                       label=f"SP={sp:.2f}")
         ax_cl.fill_between(t_cl, sp * 0.98, sp * 1.02,
-                           color=ACCENT2, alpha=0.08, label="±2%")
+                           color=ACCENT2(), alpha=0.08, label="±2%")
 
         ax_cl.set_title(f"Malha Fechada — {method}",
-                        color=ACCENT, fontsize=10, fontweight='bold')
-        ax_cl.set_xlabel("Tempo", color=TEXT_MUTED)
-        ax_cl.set_ylabel("Amplitude", color=TEXT_MUTED)
-        ax_cl.legend(facecolor=CARD_BG, edgecolor=BORDER,
-                     labelcolor=TEXT_MUTED, fontsize=9)
+                        color=ACCENT(), fontsize=10, fontweight='bold')
+        ax_cl.set_xlabel("Tempo", color=TEXT_MUTED())
+        ax_cl.set_ylabel("Amplitude", color=TEXT_MUTED())
+        ax_cl.legend(facecolor=CARD_BG(), edgecolor=BORDER(),
+                     labelcolor=TEXT_MUTED(), fontsize=9)
         canvas_cl.figure.tight_layout(pad=2)
         canvas_cl.draw()
 

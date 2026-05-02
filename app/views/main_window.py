@@ -19,179 +19,257 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
 
-# ── Paleta de cores ────────────────────────────────────────────────────────────
-DARK_BG     = "#0d1117"
-CARD_BG     = "#161b22"
-BORDER      = "#30363d"
-ACCENT      = "#58a6ff"
-ACCENT2     = "#3fb950"
-ACCENT3     = "#f78166"
-TEXT_MAIN   = "#e6edf3"
-TEXT_MUTED  = "#8b949e"
-INPUT_BG    = "#21262d"
-HOVER       = "#1f6feb"
+# ── Paletas de cores ───────────────────────────────────────────────────────────
+DARK_PALETTE = {
+    "BG":       "#0d1117",
+    "CARD":     "#161b22",
+    "BORDER":   "#30363d",
+    "ACCENT":   "#58a6ff",
+    "ACCENT2":  "#3fb950",
+    "ACCENT3":  "#f78166",
+    "TEXT":     "#e6edf3",
+    "MUTED":    "#8b949e",
+    "INPUT":    "#21262d",
+    "HOVER":    "#1f6feb",
+    "DISABLED": "#3a3f47",
+}
+
+LIGHT_PALETTE = {
+    "BG":       "#f0f2f5",
+    "CARD":     "#ffffff",
+    "BORDER":   "#d0d7de",
+    "ACCENT":   "#0969da",
+    "ACCENT2":  "#1a7f37",
+    "ACCENT3":  "#cf222e",
+    "TEXT":     "#1f2328",
+    "MUTED":    "#656d76",
+    "INPUT":    "#ffffff",
+    "HOVER":    "#0550ae",
+    "DISABLED": "#c8ced6",
+}
+
+# Tema activo (começa dark)
+_current_palette = DARK_PALETTE
+
+def _p(key):
+    return _current_palette[key]
+
+def set_palette(palette: dict):
+    global _current_palette
+    _current_palette = palette
+
+# Atalhos para compatibilidade com o controller (importados de fora)
+def _get_colors():
+    return (_p("BG"), _p("CARD"), _p("BORDER"),
+            _p("ACCENT"), _p("ACCENT2"), _p("ACCENT3"),
+            _p("TEXT"), _p("MUTED"), _p("INPUT"), _p("HOVER"))
+
+# Aliases usados no controller
+DARK_BG    = property(lambda self: _p("BG"))
+CARD_BG    = "#161b22"   # será sobrescrito dinamicamente via função
+BORDER     = "#30363d"
+ACCENT     = "#58a6ff"
+ACCENT2    = "#3fb950"
+ACCENT3    = "#f78166"
+TEXT_MAIN  = "#e6edf3"
+TEXT_MUTED = "#8b949e"
+INPUT_BG   = "#21262d"
+HOVER      = "#1f6feb"
 
 
-STYLE_SHEET = f"""
+def _build_stylesheet(p):
+    return f"""
 QMainWindow, QWidget {{
-    background-color: {DARK_BG};
-    color: {TEXT_MAIN};
+    background-color: {p['BG']};
+    color: {p['TEXT']};
     font-family: 'Consolas', 'Courier New', monospace;
     font-size: 13px;
 }}
 QTabWidget::pane {{
-    border: 1px solid {BORDER};
-    background: {CARD_BG};
+    border: 1px solid {p['BORDER']};
+    background: {p['CARD']};
     border-radius: 6px;
 }}
 QTabBar::tab {{
-    background: {DARK_BG};
-    color: {TEXT_MUTED};
+    background: {p['BG']};
+    color: {p['MUTED']};
     padding: 10px 22px;
-    border: 1px solid {BORDER};
+    border: 1px solid {p['BORDER']};
     border-bottom: none;
     border-radius: 6px 6px 0 0;
     font-weight: bold;
     letter-spacing: 1px;
 }}
 QTabBar::tab:selected {{
-    background: {CARD_BG};
-    color: {ACCENT};
-    border-bottom: 2px solid {ACCENT};
+    background: {p['CARD']};
+    color: {p['ACCENT']};
+    border-bottom: 2px solid {p['ACCENT']};
 }}
 QTabBar::tab:hover:!selected {{
-    background: {INPUT_BG};
-    color: {TEXT_MAIN};
+    background: {p['INPUT']};
+    color: {p['TEXT']};
 }}
 QPushButton {{
-    background: {INPUT_BG};
-    color: {TEXT_MAIN};
-    border: 1px solid {BORDER};
+    background: {p['INPUT']};
+    color: {p['TEXT']};
+    border: 1px solid {p['BORDER']};
     border-radius: 6px;
     padding: 7px 18px;
     font-weight: bold;
 }}
 QPushButton:hover {{
-    background: {HOVER};
-    border-color: {ACCENT};
-    color: white;
+    background: {p['HOVER']};
+    border-color: {p['ACCENT']};
+    color: {'white' if p == DARK_PALETTE else 'white'};
 }}
 QPushButton:pressed {{
-    background: #0d419d;
+    background: {'#0d419d' if p == DARK_PALETTE else '#0550ae'};
 }}
 QPushButton:disabled {{
-    color: {TEXT_MUTED};
-    background: {DARK_BG};
-    border-color: {BORDER};
+    color: {p['MUTED']};
+    background: {p['BG']};
+    border-color: {p['BORDER']};
 }}
 QPushButton#btnAccent {{
-    background: {ACCENT};
-    color: {DARK_BG};
+    background: {p['ACCENT']};
+    color: {'#0d1117' if p == DARK_PALETTE else 'white'};
     border: none;
 }}
 QPushButton#btnAccent:hover {{
-    background: #79c0ff;
+    background: {'#79c0ff' if p == DARK_PALETTE else '#0550ae'};
 }}
 QPushButton#btnGreen {{
-    background: {ACCENT2};
-    color: {DARK_BG};
+    background: {p['ACCENT2']};
+    color: {'#0d1117' if p == DARK_PALETTE else 'white'};
     border: none;
 }}
 QPushButton#btnGreen:hover {{
-    background: #56d364;
+    background: {'#56d364' if p == DARK_PALETTE else '#1a7f37'};
+}}
+QPushButton#btnTheme {{
+    background: {p['INPUT']};
+    color: {p['TEXT']};
+    border: 1px solid {p['BORDER']};
+    border-radius: 14px;
+    padding: 4px 14px;
+    font-size: 12px;
+}}
+QPushButton#btnTheme:hover {{
+    background: {p['HOVER']};
+    color: white;
+    border-color: {p['ACCENT']};
 }}
 QGroupBox {{
-    border: 1px solid {BORDER};
+    border: 1px solid {p['BORDER']};
     border-radius: 6px;
     margin-top: 14px;
     padding-top: 8px;
     font-weight: bold;
-    color: {TEXT_MUTED};
+    color: {p['MUTED']};
     letter-spacing: 1px;
 }}
 QGroupBox::title {{
     subcontrol-origin: margin;
     subcontrol-position: top left;
     padding: 0 6px;
-    color: {ACCENT};
+    color: {p['ACCENT']};
 }}
 QLabel {{
-    color: {TEXT_MAIN};
+    color: {p['TEXT']};
 }}
 QLabel#labelMuted {{
-    color: {TEXT_MUTED};
+    color: {p['MUTED']};
     font-size: 11px;
 }}
 QLabel#labelValue {{
-    color: {ACCENT};
+    color: {p['ACCENT']};
     font-weight: bold;
     font-size: 14px;
     font-family: 'Consolas', monospace;
 }}
 QLabel#labelTitle {{
-    color: {TEXT_MAIN};
+    color: {p['TEXT']};
     font-size: 18px;
     font-weight: bold;
     letter-spacing: 2px;
 }}
 QLabel#labelSub {{
-    color: {TEXT_MUTED};
+    color: {p['MUTED']};
     font-size: 11px;
     letter-spacing: 1px;
 }}
 QDoubleSpinBox, QLineEdit, QComboBox {{
-    background: {INPUT_BG};
-    border: 1px solid {BORDER};
+    background: {p['INPUT']};
+    border: 1px solid {p['BORDER']};
     border-radius: 4px;
     padding: 5px 8px;
-    color: {TEXT_MAIN};
+    color: {p['TEXT']};
     min-width: 90px;
 }}
 QDoubleSpinBox:focus, QLineEdit:focus, QComboBox:focus {{
-    border-color: {ACCENT};
+    border-color: {p['ACCENT']};
+}}
+QDoubleSpinBox:read-only {{
+    background: {p['DISABLED']};
+    color: {p['MUTED']};
 }}
 QComboBox::drop-down {{
     border: none;
     width: 24px;
 }}
 QComboBox QAbstractItemView {{
-    background: {INPUT_BG};
-    border: 1px solid {BORDER};
-    color: {TEXT_MAIN};
-    selection-background-color: {HOVER};
+    background: {p['INPUT']};
+    border: 1px solid {p['BORDER']};
+    color: {p['TEXT']};
+    selection-background-color: {p['HOVER']};
 }}
 QRadioButton {{
-    color: {TEXT_MAIN};
+    color: {p['TEXT']};
     spacing: 8px;
 }}
 QRadioButton::indicator:checked {{
-    background: {ACCENT};
+    background: {p['ACCENT']};
     border-radius: 6px;
-    border: 2px solid {ACCENT};
+    border: 2px solid {p['ACCENT']};
 }}
 QRadioButton::indicator:unchecked {{
-    background: {INPUT_BG};
+    background: {p['INPUT']};
     border-radius: 6px;
-    border: 2px solid {BORDER};
+    border: 2px solid {p['BORDER']};
 }}
 QFrame#separator {{
-    background: {BORDER};
+    background: {p['BORDER']};
     max-height: 1px;
 }}
 QStatusBar {{
-    background: {CARD_BG};
-    color: {TEXT_MUTED};
-    border-top: 1px solid {BORDER};
+    background: {p['CARD']};
+    color: {p['MUTED']};
+    border-top: 1px solid {p['BORDER']};
     font-size: 11px;
 }}
 """
+
+STYLE_SHEET = _build_stylesheet(DARK_PALETTE)
+
+# ── Legado: constantes simples para o controller ──────────────────────────────
+# (o controller importa estas; serão atualizadas via apply_theme)
+DARK_BG    = DARK_PALETTE["BG"]
+CARD_BG    = DARK_PALETTE["CARD"]
+BORDER     = DARK_PALETTE["BORDER"]
+ACCENT     = DARK_PALETTE["ACCENT"]
+ACCENT2    = DARK_PALETTE["ACCENT2"]
+ACCENT3    = DARK_PALETTE["ACCENT3"]
+TEXT_MAIN  = DARK_PALETTE["TEXT"]
+TEXT_MUTED = DARK_PALETTE["MUTED"]
+INPUT_BG   = DARK_PALETTE["INPUT"]
+HOVER      = DARK_PALETTE["HOVER"]
 
 
 # ── Canvas Matplotlib ──────────────────────────────────────────────────────────
 
 class MplCanvas(FigureCanvas):
     def __init__(self, parent=None, width=6, height=4):
-        fig = Figure(figsize=(width, height), facecolor=DARK_BG)
+        fig = Figure(figsize=(width, height), facecolor=_current_palette["BG"])
         self.ax = fig.add_subplot(111)
         self._style_ax()
         super().__init__(fig)
@@ -200,12 +278,20 @@ class MplCanvas(FigureCanvas):
         fig.tight_layout(pad=2)
 
     def _style_ax(self):
-        self.ax.set_facecolor(CARD_BG)
-        self.ax.tick_params(colors=TEXT_MUTED, labelsize=9)
-        self.ax.xaxis.label.set_color(TEXT_MUTED)
-        self.ax.yaxis.label.set_color(TEXT_MUTED)
+        p = _current_palette
+        self.ax.set_facecolor(p["CARD"])
+        self.ax.tick_params(colors=p["MUTED"], labelsize=9)
+        self.ax.xaxis.label.set_color(p["MUTED"])
+        self.ax.yaxis.label.set_color(p["MUTED"])
         for spine in self.ax.spines.values():
-            spine.set_edgecolor(BORDER)
+            spine.set_edgecolor(p["BORDER"])
+
+    def apply_theme(self):
+        """Re-aplica cores do tema atual ao canvas."""
+        p = _current_palette
+        self.figure.set_facecolor(p["BG"])
+        self._style_ax()
+        self.draw_idle()
 
     def clear_and_style(self):
         self.ax.cla()
@@ -218,26 +304,39 @@ class ParamCard(QFrame):
     def __init__(self, label, unit="", parent=None):
         super().__init__(parent)
         self.setFrameShape(QFrame.StyledPanel)
-        self.setStyleSheet(f"background:{INPUT_BG}; border:1px solid {BORDER}; border-radius:6px; padding:4px;")
         layout = QVBoxLayout(self)
         layout.setSpacing(2)
         layout.setContentsMargins(10, 8, 10, 8)
 
-        lbl = QLabel(label)
-        lbl.setObjectName("labelMuted")
-        lbl.setAlignment(Qt.AlignCenter)
+        self._lbl = QLabel(label)
+        self._lbl.setObjectName("labelMuted")
+        self._lbl.setAlignment(Qt.AlignCenter)
 
         self.value_label = QLabel("—")
         self.value_label.setObjectName("labelValue")
         self.value_label.setAlignment(Qt.AlignCenter)
 
-        unit_lbl = QLabel(unit)
-        unit_lbl.setObjectName("labelMuted")
-        unit_lbl.setAlignment(Qt.AlignCenter)
+        self._unit_lbl = QLabel(unit)
+        self._unit_lbl.setObjectName("labelMuted")
+        self._unit_lbl.setAlignment(Qt.AlignCenter)
 
-        layout.addWidget(lbl)
+        layout.addWidget(self._lbl)
         layout.addWidget(self.value_label)
-        layout.addWidget(unit_lbl)
+        layout.addWidget(self._unit_lbl)
+
+        self.apply_theme()
+
+    def apply_theme(self):
+        p = _current_palette
+        self.setStyleSheet(
+            f"background:{p['INPUT']}; border:1px solid {p['BORDER']};"
+            f" border-radius:6px; padding:4px;"
+        )
+        self._lbl.setStyleSheet(f"color:{p['MUTED']}; font-size:11px;")
+        self._unit_lbl.setStyleSheet(f"color:{p['MUTED']}; font-size:11px;")
+        self.value_label.setStyleSheet(
+            f"color:{p['ACCENT']}; font-weight:bold; font-size:14px;"
+        )
 
     def set_value(self, v, fmt=".4f"):
         self.value_label.setText(f"{v:{fmt}}")
@@ -324,10 +423,10 @@ class TabIdentificacao(QWidget):
         right_layout.setContentsMargins(0, 0, 0, 0)
 
         self.canvas = MplCanvas(self, width=7, height=5)
-        toolbar = NavigationToolbar(self.canvas, self)
-        toolbar.setStyleSheet(f"background:{CARD_BG}; color:{TEXT_MUTED};")
+        self._toolbar = NavigationToolbar(self.canvas, self)
+        self._apply_toolbar_theme()
 
-        right_layout.addWidget(toolbar)
+        right_layout.addWidget(self._toolbar)
         right_layout.addWidget(self.canvas)
 
         main_layout.addWidget(left)
@@ -337,6 +436,18 @@ class TabIdentificacao(QWidget):
         self.btn_load.clicked.connect(self.sig_load_file.emit)
         self.btn_identify.clicked.connect(self.sig_identify.emit)
         self.btn_export.clicked.connect(self.sig_export.emit)
+
+    def _apply_toolbar_theme(self):
+        p = _current_palette
+        self._toolbar.setStyleSheet(
+            f"background:{p['CARD']}; color:{p['MUTED']};"
+        )
+
+    def apply_theme(self):
+        self._apply_toolbar_theme()
+        self.canvas.apply_theme()
+        for card in [self.card_K, self.card_tau, self.card_theta, self.card_eqm]:
+            card.apply_theme()
 
     def set_file_label(self, text):
         self.label_file.setText(text)
@@ -418,14 +529,19 @@ class TabControlePID(QWidget):
         self.spin_Td = make_spin()
         self.spin_lam = make_spin(lo=0.001, hi=1e4, dec=3, step=1)
         self.spin_lam.setValue(1.0)
+        self._lam_saved = 1.0  # guarda λ ao trocar para ITAE
 
-        grp_pid_layout.addWidget(QLabel("Kp :"), 0, 0)
+        self.lbl_kp  = QLabel("Kp :")
+        self.lbl_ti  = QLabel("Ti :")
+        self.lbl_td  = QLabel("Td :")
+        self.lbl_lam = QLabel("λ  :")
+        grp_pid_layout.addWidget(self.lbl_kp,   0, 0)
         grp_pid_layout.addWidget(self.spin_Kp,  0, 1)
-        grp_pid_layout.addWidget(QLabel("Ti :"), 1, 0)
+        grp_pid_layout.addWidget(self.lbl_ti,   1, 0)
         grp_pid_layout.addWidget(self.spin_Ti,  1, 1)
-        grp_pid_layout.addWidget(QLabel("Td :"), 2, 0)
+        grp_pid_layout.addWidget(self.lbl_td,   2, 0)
         grp_pid_layout.addWidget(self.spin_Td,  2, 1)
-        grp_pid_layout.addWidget(QLabel("λ  :"), 3, 0)
+        grp_pid_layout.addWidget(self.lbl_lam,  3, 0)
         grp_pid_layout.addWidget(self.spin_lam, 3, 1)
         left_layout.addWidget(grp_pid)
 
@@ -466,10 +582,10 @@ class TabControlePID(QWidget):
         right_layout.setContentsMargins(0, 0, 0, 0)
 
         self.canvas = MplCanvas(self, width=7, height=5)
-        toolbar = NavigationToolbar(self.canvas, self)
-        toolbar.setStyleSheet(f"background:{CARD_BG}; color:{TEXT_MUTED};")
+        self._toolbar = NavigationToolbar(self.canvas, self)
+        self._apply_toolbar_theme()
 
-        right_layout.addWidget(toolbar)
+        right_layout.addWidget(self._toolbar)
         right_layout.addWidget(self.canvas)
 
         main_layout.addWidget(left)
@@ -480,22 +596,86 @@ class TabControlePID(QWidget):
         self.btn_export.clicked.connect(self.sig_export.emit)
         self.radio_method.toggled.connect(self._on_mode_changed)
         self.radio_manual.toggled.connect(self._on_mode_changed)
+        self.combo_method.currentTextChanged.connect(self._on_mode_changed)
 
         self._on_mode_changed()
 
-    def _on_mode_changed(self):
+    def _on_mode_changed(self, *_):
         is_method = self.radio_method.isChecked()
-        self.combo_method.setEnabled(is_method)
-        self.spin_Kp.setReadOnly(is_method)
-        self.spin_Ti.setReadOnly(is_method)
-        self.spin_Td.setReadOnly(is_method)
-        lam_visible = is_method and self.combo_method.currentText() == "IMC"
-        self.spin_lam.setEnabled(lam_visible)
+        is_manual = not is_method
+        # combo sempre habilitado — usuário pode escolher IMC/ITAE em qualquer modo
+        is_itae   = self.combo_method.currentText() == "ITAE"
+
+        # Salva λ APENAS quando o valor atual é real (não é o "N/A" do ITAE)
+        current_lam = self.spin_lam.value()
+        if current_lam > self.spin_lam.minimum():
+            self._lam_saved = current_lam
+
+        # Salva Kp/Ti/Td antes de qualquer alteração
+        kp_val = self.spin_Kp.value()
+        ti_val = self.spin_Ti.value()
+        td_val = self.spin_Td.value()
+
+        # combo sempre habilitado para trocar IMC/ITAE em qualquer modo
+        self.combo_method.setEnabled(True)
+
+        # Kp / Ti / Td: somente editável no modo manual
+        for spin, val in ((self.spin_Kp, kp_val),
+                          (self.spin_Ti, ti_val),
+                          (self.spin_Td, td_val)):
+            spin.setReadOnly(is_method)
+            spin.setValue(val)
+
+        muted  = _current_palette["MUTED"]
+        normal = _current_palette["TEXT"]
+
+        if is_itae:
+            # ITAE: λ desabilitado completamente, mostra N/A
+            self.spin_lam.setReadOnly(False)   # precisa estar writable para setValue
+            self.spin_lam.setEnabled(False)
+            self.spin_lam.setSpecialValueText("N/A")
+            self.spin_lam.setValue(self.spin_lam.minimum())
+            self.lbl_lam.setStyleSheet(f"color: {muted};")
+        elif is_manual:
+            # Manual: λ editável (usuário pode ajustar)
+            self.spin_lam.setEnabled(True)
+            self.spin_lam.setReadOnly(False)
+            self.spin_lam.setSpecialValueText("")
+            self.spin_lam.setValue(self._lam_saved)
+            self.lbl_lam.setStyleSheet(f"color: {normal};")
+        else:
+            # IMC automático: λ visível e editável (é parâmetro de projeto do IMC)
+            # mas salvamos o valor atual para não perder ao trocar modo
+            self.spin_lam.setEnabled(True)
+            self.spin_lam.setReadOnly(True)
+            self.spin_lam.setSpecialValueText("")
+            self.spin_lam.setValue(self._lam_saved)
+            self.lbl_lam.setStyleSheet(f"color: {normal};")
+
+            
+    def _apply_toolbar_theme(self):
+        p = _current_palette
+        self._toolbar.setStyleSheet(
+            f"background:{p['CARD']}; color:{p['MUTED']};"
+        )
+
+    def apply_theme(self):
+        self._apply_toolbar_theme()
+        self.canvas.apply_theme()
+        for card in [self.card_tr, self.card_ts, self.card_mp, self.card_ess]:
+            card.apply_theme()
+        self._on_mode_changed()
 
     def set_pid_params(self, Kp, Ti, Td):
         self.spin_Kp.setValue(Kp)
         self.spin_Ti.setValue(Ti)
         self.spin_Td.setValue(Td)
+
+    def set_lambda(self, lam: float):
+        """Atualiza λ e o valor salvo — usar sempre que o controller quiser mudar λ."""
+        self._lam_saved = lam
+        if self.spin_lam.isEnabled():
+            self.spin_lam.setValue(lam)
 
     def set_metrics(self, tr, ts, Mp, ess):
         def _s(card, v):
@@ -577,6 +757,7 @@ class TabGraficos(QWidget):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        self._is_dark = True
         self.setWindowTitle("C213 — Identificação & Controle PID  |  Grupo 7")
         self.setMinimumSize(1100, 680)
         self.setStyleSheet(STYLE_SHEET)
@@ -588,21 +769,32 @@ class MainWindow(QMainWindow):
         root.setSpacing(0)
 
         # Header faixa
-        header_bar = QFrame()
-        header_bar.setFixedHeight(48)
-        header_bar.setStyleSheet(f"background: {CARD_BG}; border-bottom: 1px solid {BORDER};")
-        hb_layout = QHBoxLayout(header_bar)
+        self._header_bar = QFrame()
+        self._header_bar.setFixedHeight(48)
+        self._header_bar.setStyleSheet(
+            f"background: {DARK_PALETTE['CARD']}; border-bottom: 1px solid {DARK_PALETTE['BORDER']};")
+        hb_layout = QHBoxLayout(self._header_bar)
         hb_layout.setContentsMargins(16, 0, 16, 0)
 
-        logo = QLabel("◈  C213  ·  PID CONTROLLER")
-        logo.setStyleSheet(f"color: {ACCENT}; font-size: 15px; font-weight: bold; letter-spacing: 3px;")
-        grupo = QLabel("GRUPO 7  ·  IMC + ITAE")
-        grupo.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px; letter-spacing: 2px;")
+        self._logo = QLabel("◈  C213  ·  PID CONTROLLER")
+        self._logo.setStyleSheet(
+            f"color: {DARK_PALETTE['ACCENT']}; font-size: 15px; font-weight: bold; letter-spacing: 3px;")
+        self._grupo = QLabel("GRUPO 7  ·  IMC + ITAE")
+        self._grupo.setStyleSheet(
+            f"color: {DARK_PALETTE['MUTED']}; font-size: 11px; letter-spacing: 2px;")
 
-        hb_layout.addWidget(logo)
+        # Botão de toggle de tema
+        self._btn_theme = QPushButton("☀  Light")
+        self._btn_theme.setObjectName("btnTheme")
+        self._btn_theme.setFixedWidth(90)
+        self._btn_theme.clicked.connect(self._toggle_theme)
+
+        hb_layout.addWidget(self._logo)
         hb_layout.addStretch()
-        hb_layout.addWidget(grupo)
-        root.addWidget(header_bar)
+        hb_layout.addWidget(self._grupo)
+        hb_layout.addSpacing(12)
+        hb_layout.addWidget(self._btn_theme)
+        root.addWidget(self._header_bar)
 
         # Tabs
         self.tabs = QTabWidget()
@@ -621,6 +813,38 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.status)
         self.status.showMessage("Pronto  |  Carregue um arquivo .mat para começar")
 
+    # ── Tema ──────────────────────────────────────────────────────────────────
+    def _toggle_theme(self):
+        self._is_dark = not self._is_dark
+        palette = DARK_PALETTE if self._is_dark else LIGHT_PALETTE
+        self.apply_theme(palette)
+
+    def apply_theme(self, palette: dict):
+        global _current_palette
+        _current_palette = palette
+        set_palette(palette)
+
+        # Stylesheet global
+        self.setStyleSheet(_build_stylesheet(palette))
+
+        # Header bar
+        self._header_bar.setStyleSheet(
+            f"background: {palette['CARD']}; border-bottom: 1px solid {palette['BORDER']};")
+        self._logo.setStyleSheet(
+            f"color: {palette['ACCENT']}; font-size: 15px; font-weight: bold; letter-spacing: 3px;")
+        self._grupo.setStyleSheet(
+            f"color: {palette['MUTED']}; font-size: 11px; letter-spacing: 2px;")
+
+        # Propaga tema para cada aba (toolbars, canvas, ParamCards)
+        self.tab_ident.apply_theme()
+        self.tab_pid.apply_theme()
+        for canvas in (self.tab_graf.canvas_ol, self.tab_graf.canvas_cl):
+            canvas.apply_theme()
+
+        # Texto do botão
+        self._btn_theme.setText("🌙  Dark" if not self._is_dark else "☀  Light")
+
+    # ── Mensagens ─────────────────────────────────────────────────────────────
     def show_error(self, msg: str):
         QMessageBox.critical(self, "Erro", msg)
 

@@ -160,7 +160,7 @@ def identify_smith(time: np.ndarray, output: np.ndarray,
     # ── EQM ────────────────────────────────────────────────────────────────
     y_model = _simulate_fopdt(K, tau, theta, time, input_signal,
                               y0=y_baseline, u0=u_baseline)
-    eqm = float(np.mean((output - y_model) ** 2))
+    eqm = float(np.sqrt(np.mean((output - y_model) ** 2)))
 
     return {
         'K': float(K),
@@ -249,9 +249,9 @@ def tune_imc(K: float, tau: float, theta: float, lam: float) -> dict:
     if K == 0:
         raise ValueError("K não pode ser zero.")
 
-    Kp = tau / (K * (lam + theta))
-    Ti = tau
-    Td = theta / 2.0
+    Kp = ((2*tau)+theta) / (K * ((2*lam) + theta))
+    Ti = tau + (theta / 2.0)
+    Td = (tau *theta) / (2.0*tau + theta)
 
     return {'Kp': Kp, 'Ti': Ti, 'Td': Td, 'method': 'IMC', 'lambda': lam}
 
@@ -271,23 +271,24 @@ def tune_itae(K: float, tau: float, theta: float) -> dict:
 
     Faixa de validade recomendada: 0,1 ≤ θ/τ ≤ 1,0
     """
+    
     if K == 0:
         raise ValueError("K não pode ser zero.")
     if tau <= 0:
         raise ValueError("τ deve ser positivo.")
 
-    ratio = max(theta / tau, 1e-6)
+    ratio = (theta / tau)
 
-    Kp = (0.965 / K) * (ratio ** -0.855)
-    Ti = tau / (0.796 - 0.1465 * ratio)
-    Td = 0.308 * tau * (ratio ** 0.929)
+    Kp = (0.965 / K) * (ratio ** -0.85)   # B = -0.85 (documento disciplina)
+    Ti = tau / (0.796 - 0.147 * ratio)    # D = -0.147 (documento disciplina)
+    Td = 0.308 * tau * (ratio ** 0.929)   # E=0.308, F=0.929
 
     return {'Kp': Kp, 'Ti': Ti, 'Td': Td, 'method': 'ITAE'}
 
 
 # ════════════════════════════════════════════════════════════════════════════
 # 5. Simulação de Malha Fechada
-# ════════════════════════════════════════════════════════════════════════════
+# ══════════════════════════════════
 
 def simulate_closed_loop(K: float, tau: float, theta: float,
                           Kp: float, Ti: float, Td: float,
@@ -328,7 +329,7 @@ def simulate_closed_loop(K: float, tau: float, theta: float,
     y_val    = 0.0
     integral = 0.0
     deriv_f  = 0.0
-    prev_err = setpoint
+    prev_err = setpoint - y_val
 
     t_arr = np.zeros(n_steps)
     y_arr = np.zeros(n_steps)
