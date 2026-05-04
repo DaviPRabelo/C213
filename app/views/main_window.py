@@ -1,10 +1,3 @@
-"""
-View principal — IHM PyQt5 com 3 abas:
-  1. Identificação (Smith)
-  2. Controle PID (IMC + ITAE)
-  3. Gráficos comparativos
-"""
-
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QTabWidget, QVBoxLayout, QHBoxLayout,
     QGridLayout, QLabel, QPushButton, QComboBox,
@@ -14,19 +7,23 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal
 
 import matplotlib
-matplotlib.use('Qt5Agg')
+matplotlib.use("Qt5Agg")
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
 
-# ── Paletas de cores ───────────────────────────────────────────────────────────
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Paletas de cores
+# ═══════════════════════════════════════════════════════════════════════════════
 DARK_PALETTE = {
     "BG":       "#0d1117",
     "CARD":     "#161b22",
     "BORDER":   "#30363d",
-    "ACCENT":   "#58a6ff",
-    "ACCENT2":  "#3fb950",
-    "ACCENT3":  "#f78166",
+    "ACCENT":   "#58a6ff",   
+    "ACCENT2":  "#3fb950",   
+    "ACCENT3":  "#f78166",   
+    "ACCENT4":  "#bc8cff",   
     "TEXT":     "#e6edf3",
     "MUTED":    "#8b949e",
     "INPUT":    "#21262d",
@@ -41,6 +38,7 @@ LIGHT_PALETTE = {
     "ACCENT":   "#0969da",
     "ACCENT2":  "#1a7f37",
     "ACCENT3":  "#cf222e",
+    "ACCENT4":  "#8250df",
     "TEXT":     "#1f2328",
     "MUTED":    "#656d76",
     "INPUT":    "#ffffff",
@@ -48,36 +46,24 @@ LIGHT_PALETTE = {
     "DISABLED": "#c8ced6",
 }
 
-# Tema activo (começa dark)
+# Paleta atual (mutável globalmente para toggle de tema)
 _current_palette = DARK_PALETTE
 
-def _p(key):
-    return _current_palette[key]
 
-def set_palette(palette: dict):
+def palette():
+    """Retorna a paleta atualmente ativa."""
+    return _current_palette
+
+
+def set_palette(p):
     global _current_palette
-    _current_palette = palette
-
-# Atalhos para compatibilidade com o controller (importados de fora)
-def _get_colors():
-    return (_p("BG"), _p("CARD"), _p("BORDER"),
-            _p("ACCENT"), _p("ACCENT2"), _p("ACCENT3"),
-            _p("TEXT"), _p("MUTED"), _p("INPUT"), _p("HOVER"))
-
-# Aliases usados no controller
-DARK_BG    = property(lambda self: _p("BG"))
-CARD_BG    = "#161b22"   # será sobrescrito dinamicamente via função
-BORDER     = "#30363d"
-ACCENT     = "#58a6ff"
-ACCENT2    = "#3fb950"
-ACCENT3    = "#f78166"
-TEXT_MAIN  = "#e6edf3"
-TEXT_MUTED = "#8b949e"
-INPUT_BG   = "#21262d"
-HOVER      = "#1f6feb"
+    _current_palette = p
 
 
-def _build_stylesheet(p):
+def build_stylesheet(p):
+    is_dark = (p is DARK_PALETTE) or (p["BG"] == DARK_PALETTE["BG"])
+    btn_text = "#0d1117" if is_dark else "white"
+
     return f"""
 QMainWindow, QWidget {{
     background-color: {p['BG']};
@@ -120,10 +106,10 @@ QPushButton {{
 QPushButton:hover {{
     background: {p['HOVER']};
     border-color: {p['ACCENT']};
-    color: {'white' if p == DARK_PALETTE else 'white'};
+    color: white;
 }}
 QPushButton:pressed {{
-    background: {'#0d419d' if p == DARK_PALETTE else '#0550ae'};
+    background: {'#0d419d' if is_dark else '#0550ae'};
 }}
 QPushButton:disabled {{
     color: {p['MUTED']};
@@ -132,19 +118,21 @@ QPushButton:disabled {{
 }}
 QPushButton#btnAccent {{
     background: {p['ACCENT']};
-    color: {'#0d1117' if p == DARK_PALETTE else 'white'};
+    color: {btn_text};
     border: none;
 }}
 QPushButton#btnAccent:hover {{
-    background: {'#79c0ff' if p == DARK_PALETTE else '#0550ae'};
+    background: {'#79c0ff' if is_dark else '#0550ae'};
+    color: {btn_text};
 }}
 QPushButton#btnGreen {{
     background: {p['ACCENT2']};
-    color: {'#0d1117' if p == DARK_PALETTE else 'white'};
+    color: {btn_text};
     border: none;
 }}
 QPushButton#btnGreen:hover {{
-    background: {'#56d364' if p == DARK_PALETTE else '#1a7f37'};
+    background: {'#56d364' if is_dark else '#1a7f37'};
+    color: {btn_text};
 }}
 QPushButton#btnTheme {{
     background: {p['INPUT']};
@@ -227,14 +215,18 @@ QRadioButton {{
     color: {p['TEXT']};
     spacing: 8px;
 }}
+QRadioButton::indicator {{
+    width: 14px;
+    height: 14px;
+}}
 QRadioButton::indicator:checked {{
     background: {p['ACCENT']};
-    border-radius: 6px;
+    border-radius: 7px;
     border: 2px solid {p['ACCENT']};
 }}
 QRadioButton::indicator:unchecked {{
     background: {p['INPUT']};
-    border-radius: 6px;
+    border-radius: 7px;
     border: 2px solid {p['BORDER']};
 }}
 QFrame#separator {{
@@ -247,48 +239,44 @@ QStatusBar {{
     border-top: 1px solid {p['BORDER']};
     font-size: 11px;
 }}
+QToolTip {{
+    background: {p['CARD']};
+    color: {p['TEXT']};
+    border: 1px solid {p['BORDER']};
+    padding: 4px;
+}}
 """
 
-STYLE_SHEET = _build_stylesheet(DARK_PALETTE)
-
-# ── Legado: constantes simples para o controller ──────────────────────────────
-# (o controller importa estas; serão atualizadas via apply_theme)
-DARK_BG    = DARK_PALETTE["BG"]
-CARD_BG    = DARK_PALETTE["CARD"]
-BORDER     = DARK_PALETTE["BORDER"]
-ACCENT     = DARK_PALETTE["ACCENT"]
-ACCENT2    = DARK_PALETTE["ACCENT2"]
-ACCENT3    = DARK_PALETTE["ACCENT3"]
-TEXT_MAIN  = DARK_PALETTE["TEXT"]
-TEXT_MUTED = DARK_PALETTE["MUTED"]
-INPUT_BG   = DARK_PALETTE["INPUT"]
-HOVER      = DARK_PALETTE["HOVER"]
-
-
-# ── Canvas Matplotlib ──────────────────────────────────────────────────────────
 
 class MplCanvas(FigureCanvas):
     def __init__(self, parent=None, width=6, height=4):
-        fig = Figure(figsize=(width, height), facecolor=_current_palette["BG"])
+        fig = Figure(figsize=(width, height), facecolor=palette()["BG"])
         self.ax = fig.add_subplot(111)
-        self._style_ax()
         super().__init__(fig)
         self.setParent(parent)
         self.figure = fig
+        self._style_ax()
         fig.tight_layout(pad=2)
 
     def _style_ax(self):
-        p = _current_palette
+        p = palette()
         self.ax.set_facecolor(p["CARD"])
         self.ax.tick_params(colors=p["MUTED"], labelsize=9)
         self.ax.xaxis.label.set_color(p["MUTED"])
         self.ax.yaxis.label.set_color(p["MUTED"])
+        self.ax.title.set_color(p["TEXT"])
         for spine in self.ax.spines.values():
             spine.set_edgecolor(p["BORDER"])
+        # restilizar legend, se houver
+        leg = self.ax.get_legend()
+        if leg is not None:
+            leg.get_frame().set_facecolor(p["CARD"])
+            leg.get_frame().set_edgecolor(p["BORDER"])
+            for text in leg.get_texts():
+                text.set_color(p["TEXT"])
 
     def apply_theme(self):
-        """Re-aplica cores do tema atual ao canvas."""
-        p = _current_palette
+        p = palette()
         self.figure.set_facecolor(p["BG"])
         self._style_ax()
         self.draw_idle()
@@ -298,9 +286,9 @@ class MplCanvas(FigureCanvas):
         self._style_ax()
 
 
-# ── Widget de parâmetro identificado ──────────────────────────────────────────
-
 class ParamCard(QFrame):
+    """Cartão estilizado para mostrar um valor numérico (ganho, métrica, etc.)."""
+
     def __init__(self, label, unit="", parent=None):
         super().__init__(parent)
         self.setFrameShape(QFrame.StyledPanel)
@@ -327,7 +315,7 @@ class ParamCard(QFrame):
         self.apply_theme()
 
     def apply_theme(self):
-        p = _current_palette
+        p = palette()
         self.setStyleSheet(
             f"background:{p['INPUT']}; border:1px solid {p['BORDER']};"
             f" border-radius:6px; padding:4px;"
@@ -339,21 +327,18 @@ class ParamCard(QFrame):
         )
 
     def set_value(self, v, fmt=".4f"):
-        self.value_label.setText(f"{v:{fmt}}")
+        try:
+            self.value_label.setText(f"{v:{fmt}}")
+        except (ValueError, TypeError):
+            self.value_label.setText("—")
 
     def clear(self):
         self.value_label.setText("—")
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# ABA 1 — Identificação
-# ═══════════════════════════════════════════════════════════════════════════════
-
 class TabIdentificacao(QWidget):
-    # Sinais para o controller
     sig_load_file = pyqtSignal()
-    sig_identify   = pyqtSignal()
-    sig_export     = pyqtSignal()
+    sig_export = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -361,13 +346,12 @@ class TabIdentificacao(QWidget):
         main_layout.setContentsMargins(12, 12, 12, 12)
         main_layout.setSpacing(12)
 
-        # ── Painel esquerdo ────────────────────────────────────────────────
+        # ── Painel esquerdo ───────────────────────────────────────────
         left = QWidget()
-        left.setFixedWidth(240)
+        left.setFixedWidth(260)
         left_layout = QVBoxLayout(left)
         left_layout.setSpacing(12)
 
-        # Header
         title = QLabel("IDENTIFICAÇÃO")
         title.setObjectName("labelTitle")
         sub = QLabel("Método de Smith — FOPDT")
@@ -375,10 +359,12 @@ class TabIdentificacao(QWidget):
         left_layout.addWidget(title)
         left_layout.addWidget(sub)
 
-        sep = QFrame(); sep.setObjectName("separator"); sep.setFrameShape(QFrame.HLine)
+        sep = QFrame()
+        sep.setObjectName("separator")
+        sep.setFrameShape(QFrame.HLine)
         left_layout.addWidget(sep)
 
-        # Arquivo
+        # Dataset
         grp_file = QGroupBox("DATASET")
         grp_file_layout = QVBoxLayout(grp_file)
         self.btn_load = QPushButton("📂  Escolher Arquivo .mat")
@@ -390,15 +376,15 @@ class TabIdentificacao(QWidget):
         grp_file_layout.addWidget(self.label_file)
         left_layout.addWidget(grp_file)
 
-        # Parâmetros identificados
+        # Parâmetros FOPDT
         grp_params = QGroupBox("PARÂMETROS FOPDT")
         grp_params_layout = QGridLayout(grp_params)
         grp_params_layout.setSpacing(8)
 
-        self.card_K     = ParamCard("Kₛ", "ganho")
-        self.card_tau   = ParamCard("τₛ", "tempo")
+        self.card_K = ParamCard("Kₛ", "ganho")
+        self.card_tau = ParamCard("τₛ", "tempo")
         self.card_theta = ParamCard("θₛ", "atraso")
-        self.card_eqm   = ParamCard("EQM", "")
+        self.card_eqm = ParamCard("EQM", "RMSE")
 
         grp_params_layout.addWidget(self.card_K,     0, 0)
         grp_params_layout.addWidget(self.card_tau,   0, 1)
@@ -406,18 +392,28 @@ class TabIdentificacao(QWidget):
         grp_params_layout.addWidget(self.card_eqm,   1, 1)
         left_layout.addWidget(grp_params)
 
-        # Botões de ação
-        self.btn_identify = QPushButton("🔍  Identificar")
-        self.btn_identify.setObjectName("btnGreen")
-        self.btn_identify.setEnabled(False)
+        # Info do experimento
+        grp_info = QGroupBox("EXPERIMENTO")
+        grp_info_layout = QGridLayout(grp_info)
+        grp_info_layout.setSpacing(8)
+
+        self.card_u0 = ParamCard("u₀", "")
+        self.card_u1 = ParamCard("u_f", "")
+        self.card_yinf = ParamCard("y∞", "")
+        self.card_tstep = ParamCard("t_d", "degrau")
+
+        grp_info_layout.addWidget(self.card_u0,    0, 0)
+        grp_info_layout.addWidget(self.card_u1,    0, 1)
+        grp_info_layout.addWidget(self.card_yinf,  1, 0)
+        grp_info_layout.addWidget(self.card_tstep, 1, 1)
+        left_layout.addWidget(grp_info)
+
         self.btn_export = QPushButton("💾  Exportar Gráfico")
         self.btn_export.setEnabled(False)
-
-        left_layout.addWidget(self.btn_identify)
         left_layout.addWidget(self.btn_export)
         left_layout.addStretch()
 
-        # ── Gráfico ───────────────────────────────────────────────────────
+        # ── Gráfico ──────────────────────────────────────────────────
         right = QWidget()
         right_layout = QVBoxLayout(right)
         right_layout.setContentsMargins(0, 0, 0, 0)
@@ -432,44 +428,50 @@ class TabIdentificacao(QWidget):
         main_layout.addWidget(left)
         main_layout.addWidget(right, stretch=1)
 
-        # Conexões internas → emite sinais para controller
+        # Sinais
         self.btn_load.clicked.connect(self.sig_load_file.emit)
-        self.btn_identify.clicked.connect(self.sig_identify.emit)
         self.btn_export.clicked.connect(self.sig_export.emit)
 
     def _apply_toolbar_theme(self):
-        p = _current_palette
+        p = palette()
         self._toolbar.setStyleSheet(
-            f"background:{p['CARD']}; color:{p['MUTED']};"
+            f"background:{p['CARD']}; color:{p['MUTED']}; border:none;"
         )
 
     def apply_theme(self):
         self._apply_toolbar_theme()
         self.canvas.apply_theme()
-        for card in [self.card_K, self.card_tau, self.card_theta, self.card_eqm]:
-            card.apply_theme()
+        for c in (self.card_K, self.card_tau, self.card_theta, self.card_eqm,
+                  self.card_u0, self.card_u1, self.card_yinf, self.card_tstep):
+            c.apply_theme()
 
     def set_file_label(self, text):
         self.label_file.setText(text)
 
     def set_params(self, K, tau, theta, eqm):
-        self.card_K.set_value(K)
-        self.card_tau.set_value(tau)
-        self.card_theta.set_value(theta)
-        self.card_eqm.set_value(eqm)
+        self.card_K.set_value(K, ".4f")
+        self.card_tau.set_value(tau, ".4f")
+        self.card_theta.set_value(theta, ".4f")
+        self.card_eqm.set_value(eqm, ".4f")
+
+    def set_experiment_info(self, u0, u1, y_inf, t_step):
+        self.card_u0.set_value(u0, ".2f")
+        self.card_u1.set_value(u1, ".2f")
+        self.card_yinf.set_value(y_inf, ".3f")
+        self.card_tstep.set_value(t_step, ".2f")
 
     def clear_params(self):
-        for c in [self.card_K, self.card_tau, self.card_theta, self.card_eqm]:
+        for c in (self.card_K, self.card_tau, self.card_theta, self.card_eqm,
+                  self.card_u0, self.card_u1, self.card_yinf, self.card_tstep):
             c.clear()
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# ABA 2 — Controle PID
-# ═══════════════════════════════════════════════════════════════════════════════
 
 class TabControlePID(QWidget):
-    sig_tune   = pyqtSignal()
+    sig_tune = pyqtSignal()
     sig_export = pyqtSignal()
+    sig_method_changed = pyqtSignal()  # combo IMC/ITAE alterado em modo Método
+    sig_lambda_changed = pyqtSignal()  # λ alterado pelo usuário
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -477,9 +479,9 @@ class TabControlePID(QWidget):
         main_layout.setContentsMargins(12, 12, 12, 12)
         main_layout.setSpacing(12)
 
-        # ── Painel esquerdo ────────────────────────────────────────────────
+        # ── Painel esquerdo ───────────────────────────────────────────
         left = QWidget()
-        left.setFixedWidth(260)
+        left.setFixedWidth(280)
         left_layout = QVBoxLayout(left)
         left_layout.setSpacing(12)
 
@@ -490,10 +492,12 @@ class TabControlePID(QWidget):
         left_layout.addWidget(title)
         left_layout.addWidget(sub)
 
-        sep = QFrame(); sep.setObjectName("separator"); sep.setFrameShape(QFrame.HLine)
+        sep = QFrame()
+        sep.setObjectName("separator")
+        sep.setFrameShape(QFrame.HLine)
         left_layout.addWidget(sep)
 
-        # Seleção método
+        # Modo de sintonia
         grp_sel = QGroupBox("MODO DE SINTONIA")
         grp_sel_layout = QVBoxLayout(grp_sel)
 
@@ -529,7 +533,7 @@ class TabControlePID(QWidget):
         self.spin_Td = make_spin()
         self.spin_lam = make_spin(lo=0.001, hi=1e4, dec=3, step=1)
         self.spin_lam.setValue(1.0)
-        self._lam_saved = 1.0  # guarda λ ao trocar para ITAE
+        self._lam_saved = 1.0
 
         self.lbl_kp  = QLabel("Kp :")
         self.lbl_ti  = QLabel("Ti :")
@@ -545,28 +549,33 @@ class TabControlePID(QWidget):
         grp_pid_layout.addWidget(self.spin_lam, 3, 1)
         left_layout.addWidget(grp_pid)
 
-        # SetPoint e Métricas
-        grp_ctrl = QGroupBox("CONTROLE")
+        # Setpoint e métricas
+        grp_ctrl = QGroupBox("RESPOSTA")
         grp_ctrl_layout = QGridLayout(grp_ctrl)
+        grp_ctrl_layout.setSpacing(8)
 
         self.spin_sp = make_spin(lo=-1e4, hi=1e4, dec=2, step=1)
-        self.spin_sp.setValue(1.0)
+        self.spin_sp.setValue(45.0)
+        self.spin_tsim = make_spin(lo=1.0, hi=1e5, dec=1, step=10)
+        self.spin_tsim.setValue(200.0)
 
-        self.card_tr = ParamCard("tᵣ", "subida")
-        self.card_ts = ParamCard("tₛ", "acomod.")
-        self.card_mp = ParamCard("Mp", "%")
-        self.card_ess = ParamCard("ess", "erro")
+        self.card_tr = ParamCard("tᵣ", "subida [s]")
+        self.card_ts = ParamCard("tₛ", "acomod. [s]")
+        self.card_mp = ParamCard("Mp", "overshoot %")
+        self.card_ess = ParamCard("ess", "erro RP")
 
-        grp_ctrl_layout.addWidget(QLabel("SetPoint:"), 0, 0)
-        grp_ctrl_layout.addWidget(self.spin_sp, 0, 1)
-        grp_ctrl_layout.addWidget(self.card_tr,  1, 0)
-        grp_ctrl_layout.addWidget(self.card_ts,  1, 1)
-        grp_ctrl_layout.addWidget(self.card_mp,  2, 0)
-        grp_ctrl_layout.addWidget(self.card_ess, 2, 1)
+        grp_ctrl_layout.addWidget(QLabel("SP:"),     0, 0)
+        grp_ctrl_layout.addWidget(self.spin_sp,     0, 1)
+        grp_ctrl_layout.addWidget(QLabel("t_sim:"), 1, 0)
+        grp_ctrl_layout.addWidget(self.spin_tsim,   1, 1)
+        grp_ctrl_layout.addWidget(self.card_tr,    2, 0)
+        grp_ctrl_layout.addWidget(self.card_ts,    2, 1)
+        grp_ctrl_layout.addWidget(self.card_mp,    3, 0)
+        grp_ctrl_layout.addWidget(self.card_ess,   3, 1)
         left_layout.addWidget(grp_ctrl)
 
         # Botões
-        self.btn_tune   = QPushButton("⚙️  Sintonizar")
+        self.btn_tune = QPushButton("⚙️  Sintonizar")
         self.btn_tune.setObjectName("btnGreen")
         self.btn_tune.setEnabled(False)
         self.btn_export = QPushButton("💾  Exportar Gráfico")
@@ -576,7 +585,7 @@ class TabControlePID(QWidget):
         left_layout.addWidget(self.btn_export)
         left_layout.addStretch()
 
-        # ── Gráfico ───────────────────────────────────────────────────────
+        # ── Gráfico ──────────────────────────────────────────────────
         right = QWidget()
         right_layout = QVBoxLayout(right)
         right_layout.setContentsMargins(0, 0, 0, 0)
@@ -591,105 +600,106 @@ class TabControlePID(QWidget):
         main_layout.addWidget(left)
         main_layout.addWidget(right, stretch=1)
 
-        # Conexões
+        # Sinais
         self.btn_tune.clicked.connect(self.sig_tune.emit)
         self.btn_export.clicked.connect(self.sig_export.emit)
         self.radio_method.toggled.connect(self._on_mode_changed)
-        self.radio_manual.toggled.connect(self._on_mode_changed)
-        self.combo_method.currentTextChanged.connect(self._on_mode_changed)
+        self.combo_method.currentTextChanged.connect(self._on_combo_changed)
+        self.spin_lam.valueChanged.connect(self._on_lambda_changed)
 
         self._on_mode_changed()
 
+    # ── Comportamento de UI ───────────────────────────────────────────
     def _on_mode_changed(self, *_):
         is_method = self.radio_method.isChecked()
-        is_manual = not is_method
-        # combo sempre habilitado — usuário pode escolher IMC/ITAE em qualquer modo
-        is_itae   = self.combo_method.currentText() == "ITAE"
+        is_itae = self.combo_method.currentText() == "ITAE"
 
-        # Salva λ APENAS quando o valor atual é real (não é o "N/A" do ITAE)
-        current_lam = self.spin_lam.value()
-        if current_lam > self.spin_lam.minimum():
-            self._lam_saved = current_lam
-
-        # Salva Kp/Ti/Td antes de qualquer alteração
-        kp_val = self.spin_Kp.value()
-        ti_val = self.spin_Ti.value()
-        td_val = self.spin_Td.value()
-
-        # combo sempre habilitado para trocar IMC/ITAE em qualquer modo
+        # combo sempre ativo
         self.combo_method.setEnabled(True)
+        # Kp/Ti/Td só editável em modo manual
+        for s in (self.spin_Kp, self.spin_Ti, self.spin_Td):
+            s.setReadOnly(is_method)
 
-        # Kp / Ti / Td: somente editável no modo manual
-        for spin, val in ((self.spin_Kp, kp_val),
-                          (self.spin_Ti, ti_val),
-                          (self.spin_Td, td_val)):
-            spin.setReadOnly(is_method)
-            spin.setValue(val)
-
-        muted  = _current_palette["MUTED"]
-        normal = _current_palette["TEXT"]
-
+        # λ
         if is_itae:
-            # ITAE: λ desabilitado completamente, mostra N/A
-            self.spin_lam.setReadOnly(False)   # precisa estar writable para setValue
+            # ITAE: λ não se aplica
             self.spin_lam.setEnabled(False)
             self.spin_lam.setSpecialValueText("N/A")
+            # forçar mostrar N/A:
+            self.spin_lam.blockSignals(True)
             self.spin_lam.setValue(self.spin_lam.minimum())
-            self.lbl_lam.setStyleSheet(f"color: {muted};")
-        elif is_manual:
-            # Manual: λ editável (usuário pode ajustar)
-            self.spin_lam.setEnabled(True)
-            self.spin_lam.setReadOnly(False)
-            self.spin_lam.setSpecialValueText("")
-            self.spin_lam.setValue(self._lam_saved)
-            self.lbl_lam.setStyleSheet(f"color: {normal};")
+            self.spin_lam.blockSignals(False)
         else:
-            # IMC automático: λ visível e editável (é parâmetro de projeto do IMC)
-            # mas salvamos o valor atual para não perder ao trocar modo
+            # IMC: λ editável (parâmetro de projeto)
             self.spin_lam.setEnabled(True)
-            self.spin_lam.setReadOnly(True)
             self.spin_lam.setSpecialValueText("")
-            self.spin_lam.setValue(self._lam_saved)
-            self.lbl_lam.setStyleSheet(f"color: {normal};")
+            self.spin_lam.blockSignals(True)
+            if self.spin_lam.value() <= self.spin_lam.minimum():
+                self.spin_lam.setValue(self._lam_saved)
+            self.spin_lam.blockSignals(False)
 
-            
+        # se mudamos para método, recalcula automaticamente
+        if is_method:
+            self.sig_method_changed.emit()
+
+    def _on_combo_changed(self, *_):
+        # ao mudar IMC↔ITAE, ajusta UI e (se modo método) emite recálculo
+        self._on_mode_changed()
+
+    def _on_lambda_changed(self, *_):
+        if not self.spin_lam.isEnabled():
+            return
+        v = self.spin_lam.value()
+        if v > self.spin_lam.minimum():
+            self._lam_saved = v
+            if self.radio_method.isChecked() and self.combo_method.currentText() == "IMC":
+                self.sig_lambda_changed.emit()
+
+    # ── Tema ─────────────────────────────────────────────────────────
     def _apply_toolbar_theme(self):
-        p = _current_palette
+        p = palette()
         self._toolbar.setStyleSheet(
-            f"background:{p['CARD']}; color:{p['MUTED']};"
+            f"background:{p['CARD']}; color:{p['MUTED']}; border:none;"
         )
 
     def apply_theme(self):
         self._apply_toolbar_theme()
         self.canvas.apply_theme()
-        for card in [self.card_tr, self.card_ts, self.card_mp, self.card_ess]:
-            card.apply_theme()
-        self._on_mode_changed()
+        for c in (self.card_tr, self.card_ts, self.card_mp, self.card_ess):
+            c.apply_theme()
 
+    # ── API para o controller ────────────────────────────────────────
     def set_pid_params(self, Kp, Ti, Td):
+        self.spin_Kp.blockSignals(True)
+        self.spin_Ti.blockSignals(True)
+        self.spin_Td.blockSignals(True)
         self.spin_Kp.setValue(Kp)
         self.spin_Ti.setValue(Ti)
         self.spin_Td.setValue(Td)
+        self.spin_Kp.blockSignals(False)
+        self.spin_Ti.blockSignals(False)
+        self.spin_Td.blockSignals(False)
 
-    def set_lambda(self, lam: float):
-        """Atualiza λ e o valor salvo — usar sempre que o controller quiser mudar λ."""
+    def set_lambda(self, lam):
         self._lam_saved = lam
         if self.spin_lam.isEnabled():
+            self.spin_lam.blockSignals(True)
             self.spin_lam.setValue(lam)
+            self.spin_lam.blockSignals(False)
 
     def set_metrics(self, tr, ts, Mp, ess):
-        def _s(card, v):
+        def _s(card, v, fmt):
             if v is not None:
-                card.set_value(v, ".2f")
+                card.set_value(v, fmt)
             else:
                 card.clear()
-        _s(self.card_tr,  tr)
-        _s(self.card_ts,  ts)
-        _s(self.card_mp,  Mp)
-        _s(self.card_ess, ess)
+        _s(self.card_tr, tr, ".2f")
+        _s(self.card_ts, ts, ".2f")
+        _s(self.card_mp, Mp, ".2f")
+        _s(self.card_ess, ess, ".4f")
 
     def get_pid_params(self):
-        return (self.spin_Kp.value(), self.spin_Ti.value(), self.spin_Td.value())
+        return self.spin_Kp.value(), self.spin_Ti.value(), self.spin_Td.value()
 
     def is_manual(self):
         return self.radio_manual.isChecked()
@@ -698,69 +708,97 @@ class TabControlePID(QWidget):
         return self.combo_method.currentText()
 
     def get_lambda(self):
-        return self.spin_lam.value()
+        v = self.spin_lam.value()
+        if v <= self.spin_lam.minimum():
+            return None
+        return v
 
     def get_setpoint(self):
         return self.spin_sp.value()
 
+    def get_tsim(self):
+        return self.spin_tsim.value()
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# ABA 3 — Gráficos Comparativos
-# ═══════════════════════════════════════════════════════════════════════════════
 
 class TabGraficos(QWidget):
     sig_compare = pyqtSignal()
+    sig_export = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
 
+        # Cabeçalho
         header = QHBoxLayout()
-        title = QLabel("COMPARAÇÃO — MALHA ABERTA × MALHA FECHADA")
+        title = QLabel("COMPARAÇÃO  ·  MALHA ABERTA × MALHA FECHADA")
         title.setObjectName("labelTitle")
         self.btn_compare = QPushButton("📊  Atualizar Comparação")
         self.btn_compare.setObjectName("btnAccent")
         self.btn_compare.setEnabled(False)
+        self.btn_export = QPushButton("💾  Exportar")
+        self.btn_export.setEnabled(False)
         header.addWidget(title)
         header.addStretch()
         header.addWidget(self.btn_compare)
+        header.addWidget(self.btn_export)
         layout.addLayout(header)
 
-        sep = QFrame(); sep.setObjectName("separator"); sep.setFrameShape(QFrame.HLine)
+        sep = QFrame()
+        sep.setObjectName("separator")
+        sep.setFrameShape(QFrame.HLine)
         layout.addWidget(sep)
 
         # Dois gráficos lado a lado
         plots = QHBoxLayout()
-        self.canvas_ol = MplCanvas(self, width=5, height=4)
-        self.canvas_cl = MplCanvas(self, width=5, height=4)
+        plots.setSpacing(12)
 
-        frame_ol = QGroupBox("MALHA ABERTA (Open Loop)")
+        frame_ol = QGroupBox("MALHA ABERTA  (resposta natural da planta)")
         fl = QVBoxLayout(frame_ol)
+        self.canvas_ol = MplCanvas(self, width=5, height=4)
+        self._toolbar_ol = NavigationToolbar(self.canvas_ol, self)
+        fl.addWidget(self._toolbar_ol)
         fl.addWidget(self.canvas_ol)
 
-        frame_cl = QGroupBox("MALHA FECHADA (Closed Loop)")
+        frame_cl = QGroupBox("MALHA FECHADA  (IMC × ITAE)")
         fcl = QVBoxLayout(frame_cl)
+        self.canvas_cl = MplCanvas(self, width=5, height=4)
+        self._toolbar_cl = NavigationToolbar(self.canvas_cl, self)
+        fcl.addWidget(self._toolbar_cl)
         fcl.addWidget(self.canvas_cl)
 
         plots.addWidget(frame_ol)
         plots.addWidget(frame_cl)
         layout.addLayout(plots)
 
+        self._apply_toolbar_theme()
+
+        # Sinais
         self.btn_compare.clicked.connect(self.sig_compare.emit)
+        self.btn_export.clicked.connect(self.sig_export.emit)
 
+    def _apply_toolbar_theme(self):
+        p = palette()
+        for tb in (self._toolbar_ol, self._toolbar_cl):
+            tb.setStyleSheet(
+                f"background:{p['CARD']}; color:{p['MUTED']}; border:none;"
+            )
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# Janela Principal
-# ═══════════════════════════════════════════════════════════════════════════════
+    def apply_theme(self):
+        self._apply_toolbar_theme()
+        self.canvas_ol.apply_theme()
+        self.canvas_cl.apply_theme()
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self._is_dark = True
-        self.setWindowTitle("C213 — Identificação & Controle PID  |  Grupo 7")
-        self.setMinimumSize(1100, 680)
-        self.setStyleSheet(STYLE_SHEET)
+        self._theme_callback = None  # callback opcional p/ controller redesenhar plots
+        self.setWindowTitle("C213  ·  Identificação & Controle PID  ·  Grupo 7")
+        self.setMinimumSize(1180, 720)
+        self.setStyleSheet(build_stylesheet(DARK_PALETTE))
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -768,22 +806,15 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # Header faixa
+        # ── Header bar ───────────────────────────────────────────────
         self._header_bar = QFrame()
         self._header_bar.setFixedHeight(48)
-        self._header_bar.setStyleSheet(
-            f"background: {DARK_PALETTE['CARD']}; border-bottom: 1px solid {DARK_PALETTE['BORDER']};")
         hb_layout = QHBoxLayout(self._header_bar)
         hb_layout.setContentsMargins(16, 0, 16, 0)
 
         self._logo = QLabel("◈  C213  ·  PID CONTROLLER")
-        self._logo.setStyleSheet(
-            f"color: {DARK_PALETTE['ACCENT']}; font-size: 15px; font-weight: bold; letter-spacing: 3px;")
-        self._grupo = QLabel("GRUPO 7  ·  IMC + ITAE")
-        self._grupo.setStyleSheet(
-            f"color: {DARK_PALETTE['MUTED']}; font-size: 11px; letter-spacing: 2px;")
+        self._grupo = QLabel("GRUPO 7  ·  SMITH + IMC + ITAE")
 
-        # Botão de toggle de tema
         self._btn_theme = QPushButton("☀  Light")
         self._btn_theme.setObjectName("btnTheme")
         self._btn_theme.setFixedWidth(90)
@@ -796,11 +827,13 @@ class MainWindow(QMainWindow):
         hb_layout.addWidget(self._btn_theme)
         root.addWidget(self._header_bar)
 
-        # Tabs
+        self._style_header(DARK_PALETTE)
+
+        # ── Tabs ─────────────────────────────────────────────────────
         self.tabs = QTabWidget()
         self.tab_ident = TabIdentificacao()
-        self.tab_pid   = TabControlePID()
-        self.tab_graf  = TabGraficos()
+        self.tab_pid = TabControlePID()
+        self.tab_graf = TabGraficos()
 
         self.tabs.addTab(self.tab_ident, "  IDENTIFICAÇÃO  ")
         self.tabs.addTab(self.tab_pid,   "  CONTROLE PID   ")
@@ -813,43 +846,49 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.status)
         self.status.showMessage("Pronto  |  Carregue um arquivo .mat para começar")
 
-    # ── Tema ──────────────────────────────────────────────────────────────────
+    # ── Header style helper ──────────────────────────────────────────
+    def _style_header(self, p):
+        self._header_bar.setStyleSheet(
+            f"background:{p['CARD']}; border-bottom:1px solid {p['BORDER']};"
+        )
+        self._logo.setStyleSheet(
+            f"color:{p['ACCENT']}; font-size:15px; font-weight:bold; letter-spacing:3px;"
+        )
+        self._grupo.setStyleSheet(
+            f"color:{p['MUTED']}; font-size:11px; letter-spacing:2px;"
+        )
+
+    # ── Toggle de tema ───────────────────────────────────────────────
     def _toggle_theme(self):
         self._is_dark = not self._is_dark
-        palette = DARK_PALETTE if self._is_dark else LIGHT_PALETTE
-        self.apply_theme(palette)
+        new_palette = DARK_PALETTE if self._is_dark else LIGHT_PALETTE
+        self.apply_theme(new_palette)
 
-    def apply_theme(self, palette: dict):
-        global _current_palette
-        _current_palette = palette
-        set_palette(palette)
-
-        # Stylesheet global
-        self.setStyleSheet(_build_stylesheet(palette))
-
-        # Header bar
-        self._header_bar.setStyleSheet(
-            f"background: {palette['CARD']}; border-bottom: 1px solid {palette['BORDER']};")
-        self._logo.setStyleSheet(
-            f"color: {palette['ACCENT']}; font-size: 15px; font-weight: bold; letter-spacing: 3px;")
-        self._grupo.setStyleSheet(
-            f"color: {palette['MUTED']}; font-size: 11px; letter-spacing: 2px;")
-
-        # Propaga tema para cada aba (toolbars, canvas, ParamCards)
+    def apply_theme(self, p):
+        set_palette(p)
+        self.setStyleSheet(build_stylesheet(p))
+        self._style_header(p)
         self.tab_ident.apply_theme()
         self.tab_pid.apply_theme()
-        for canvas in (self.tab_graf.canvas_ol, self.tab_graf.canvas_cl):
-            canvas.apply_theme()
-
-        # Texto do botão
+        self.tab_graf.apply_theme()
         self._btn_theme.setText("🌙  Dark" if not self._is_dark else "☀  Light")
+        # notificar controller para redesenhar gráficos com as novas cores
+        if self._theme_callback is not None:
+            self._theme_callback()
 
-    # ── Mensagens ─────────────────────────────────────────────────────────────
-    def show_error(self, msg: str):
+    def set_theme_callback(self, cb):
+        """Registra callback para ser chamado após troca de tema."""
+        self._theme_callback = cb
+
+    # ── Mensagens ────────────────────────────────────────────────────
+    def show_error(self, msg):
         QMessageBox.critical(self, "Erro", msg)
 
-    def show_info(self, msg: str):
+    def show_warning(self, msg):
+        QMessageBox.warning(self, "Aviso", msg)
+
+    def show_info(self, msg):
         QMessageBox.information(self, "Info", msg)
 
-    def set_status(self, msg: str):
+    def set_status(self, msg):
         self.status.showMessage(msg)
