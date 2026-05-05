@@ -10,6 +10,7 @@ from app.models.pid_tuning import (
     simulate_closed_loop, simulate_open_loop,
     closed_loop_tf, is_stable, response_metrics,
 )
+from app.models.auth import AuthManager
 from app.views.main_window import palette
 
 
@@ -17,21 +18,25 @@ class MainController:
     def __init__(self, view):
         self.view = view
 
-        # Estado
         self.t = None
         self.u = None
         self.y = None
         self.params = None     
         self.last_sim = None   
 
+        self.auth = AuthManager()
+
         self._connect_signals()
 
     # ──────────────────────────────────────────────────────────────────
     def _connect_signals(self):
-        # Aba 1 — Identificação
+        self.view.tab_login.sig_connect_db.connect(self._connect_db)
+        self.view.tab_login.sig_login.connect(self._do_login)
+        self.view.tab_login.sig_register.connect(self._do_register)
+        self.view.tab_login.sig_logout.connect(self._do_logout)
+
         self.view.tab_ident.sig_load_file.connect(self.load_dataset)
         self.view.tab_ident.sig_export.connect(self._export_ident)
-
 
         self.view.tab_pid.sig_tune.connect(self.simulate_pid)
         self.view.tab_pid.sig_method_changed.connect(self._update_pid_from_method)
@@ -41,7 +46,63 @@ class MainController:
         self.view.tab_graf.sig_compare.connect(self.compare_plots)
         self.view.tab_graf.sig_export.connect(self._export_compare)
 
+    def _connect_db(self, uri):
 
+        if self.auth.is_connected and self.auth.uri == uri:
+            return  
+        self.auth.close()
+        self.auth = AuthManager(uri=uri)
+        ok, msg = self.auth.connect()
+        if not ok:
+            self.view.tab_login.show_login_error(msg)
+            self.view.set_status(f"✗ MongoDB: {msg}")
+
+    def _do_login(self, username, password):
+        """Tenta autenticar o usuário."""
+        if not self.auth.is_connected:
+            self.view.tab_login.show_login_error(
+                "Sem conexão com o MongoDB. Verifique a URI."
+            )
+            return
+
+        ok, msg = self.auth.login(username, password)
+        if ok:
+            user = self.auth.current_user
+            self.view.tab_login.show_login_success(msg)
+            self.view.tab_login.set_logged_in(
+                user["nome"], user["grupo"]
+            )
+            self.view.unlock_tabs(user["nome"], user["grupo"])
+            self.view.set_status(
+                f"✓ Logado como {user['nome']}  ·  Grupo {user['grupo']}"
+                f"  |  Carregue um arquivo .mat na aba Identificação"
+            )
+        else:
+            self.view.tab_login.show_login_error(msg)
+
+    def _do_register(self, username, password, nome, grupo):
+        if not self.auth.is_connected:
+            self.view.tab_login.show_register_error(
+                "Sem conexão com o MongoDB. Verifique a URI na tela de Login."
+            )
+            return
+
+        ok, msg = self.auth.register(username, password, nome=nome, grupo=grupo)
+        if ok:
+            self.view.tab_login.show_register_success(
+                f"{msg}\nVocê já pode fazer login!"
+            )
+        else:
+            self.view.tab_login.show_register_error(msg)
+
+    def _do_logout(self):
+        """Faz logout e bloqueia as abas."""
+        self.auth.logout()
+        self.view.lock_tabs()
+
+    # ──────────────────────────────────────────────────────────────────
+    # ABA 1 — Identificação
+    # ──────────────────────────────────────────────────────────────────
     def load_dataset(self):
         path, _ = QFileDialog.getOpenFileName(
             self.view, "Selecionar arquivo .mat", "", "MATLAB files (*.mat)"
@@ -63,7 +124,7 @@ class MainController:
             self.u = np.asarray(u).squeeze()
             self.y = np.asarray(y).squeeze()
 
-
+            # Identificar por Smith
             self.params = identify_smith(self.t, self.u, self.y)
 
             # Atualizar UI
@@ -78,7 +139,7 @@ class MainController:
             self._plot_identification()
             self.view.tab_ident.btn_export.setEnabled(True)
 
-
+            # Liberar PID e Comparativo
             self.view.tab_pid.btn_tune.setEnabled(True)
             self.view.tab_graf.btn_compare.setEnabled(True)
 
@@ -163,9 +224,10 @@ class MainController:
             )
             self.view.set_status(f"✓ Gráfico exportado: {path}")
 
-
+    # ──────────────────────────────────────────────────────────────────
+    # ABA 2 — Controle PID
+    # ──────────────────────────────────────────────────────────────────
     def _update_pid_from_method(self):
-        """Recalcula Kp/Ti/Td a partir do método selecionado (modo automático)."""
         if self.params is None:
             return
         if self.view.tab_pid.is_manual():
@@ -214,7 +276,6 @@ class MainController:
             else:
                 self.view.show_warning(msg)
 
-        # Simulação
         n = max(401, int(t_total * 20) + 1)
         t_sim = np.linspace(0, t_total, n)
         t, y, estavel, poles = simulate_closed_loop(k, tau, theta, Kp, Ti, Td, SP, t_sim)
@@ -303,7 +364,9 @@ class MainController:
             )
             self.view.set_status(f"✓ Gráfico exportado: {path}")
 
-
+    # ──────────────────────────────────────────────────────────────────
+    # ABA 3 — Comparativo
+    # ──────────────────────────────────────────────────────────────────
     def compare_plots(self):
         if self.params is None:
             self.view.show_warning("Carregue primeiro um dataset na aba de Identificação.")
@@ -314,13 +377,10 @@ class MainController:
         t_total = self.view.tab_pid.get_tsim()
         t_sim = np.linspace(0, t_total, max(401, int(t_total * 20) + 1))
 
-        # ── Malha aberta — usar amplitude do degrau original do experimento
         U_step = self.params["u1"] - self.params["u0"]
         t_ol, y_ol = simulate_open_loop(k, tau, theta, U_step, t_sim)
-        # somar offset y0 para mostrar no mesmo nível do experimento
         y_ol_plot = y_ol + self.params["y0"]
 
-        # ── Malha fechada — IMC e ITAE
         imc = tune_imc(k, tau, theta, lam=self._lambda_for_compare(tau))
         itae = tune_itae(k, tau, theta)
 
@@ -345,7 +405,6 @@ class MainController:
         )
 
     def _lambda_for_compare(self, tau):
-        """λ usado na comparação — pega o atual da UI ou tau como default."""
         lam = self.view.tab_pid.get_lambda()
         return lam if (lam is not None and lam > 0) else tau
 
@@ -429,9 +488,7 @@ class MainController:
         )
         self.view.set_status(f"✓ Exportado: {path_cl} e {path_ol}")
 
-
     def refresh_plots(self):
-        """Re-renderiza os plots com as cores do tema atual."""
         if self.params is not None:
             self._plot_identification()
         if self.last_sim is not None:

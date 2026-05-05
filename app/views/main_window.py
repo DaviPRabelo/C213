@@ -2,7 +2,8 @@ from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QTabWidget, QVBoxLayout, QHBoxLayout,
     QGridLayout, QLabel, QPushButton, QComboBox,
     QDoubleSpinBox, QGroupBox, QRadioButton, QButtonGroup,
-    QFrame, QMessageBox, QStatusBar
+    QFrame, QMessageBox, QStatusBar, QLineEdit, QStackedWidget,
+    QSizePolicy
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
@@ -46,12 +47,11 @@ LIGHT_PALETTE = {
     "DISABLED": "#c8ced6",
 }
 
-# Paleta atual (mutável globalmente para toggle de tema)
+
 _current_palette = DARK_PALETTE
 
 
 def palette():
-    """Retorna a paleta atualmente ativa."""
     return _current_palette
 
 
@@ -60,6 +60,9 @@ def set_palette(p):
     _current_palette = p
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Stylesheet dinâmico
+# ═══════════════════════════════════════════════════════════════════════════════
 def build_stylesheet(p):
     is_dark = (p is DARK_PALETTE) or (p["BG"] == DARK_PALETTE["BG"])
     btn_text = "#0d1117" if is_dark else "white"
@@ -245,8 +248,77 @@ QToolTip {{
     border: 1px solid {p['BORDER']};
     padding: 4px;
 }}
+QLineEdit#loginInput {{
+    background: {p['INPUT']};
+    border: 1px solid {p['BORDER']};
+    border-radius: 6px;
+    padding: 10px 14px;
+    color: {p['TEXT']};
+    font-size: 14px;
+    min-width: 240px;
+    min-height: 20px;
+}}
+QLineEdit#loginInput:focus {{
+    border-color: {p['ACCENT']};
+    border-width: 2px;
+}}
+QPushButton#btnLogin {{
+    background: {p['ACCENT']};
+    color: {btn_text};
+    border: none;
+    border-radius: 6px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: bold;
+    min-height: 20px;
+}}
+QPushButton#btnLogin:hover {{
+    background: {'#79c0ff' if is_dark else '#0550ae'};
+}}
+QPushButton#btnRegister {{
+    background: {p['ACCENT2']};
+    color: {btn_text};
+    border: none;
+    border-radius: 6px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: bold;
+    min-height: 20px;
+}}
+QPushButton#btnRegister:hover {{
+    background: {'#56d364' if is_dark else '#1a7f37'};
+}}
+QPushButton#btnLink {{
+    background: none;
+    border: none;
+    color: {p['ACCENT']};
+    font-size: 12px;
+    text-decoration: underline;
+    padding: 4px;
+}}
+QPushButton#btnLink:hover {{
+    color: {'#79c0ff' if is_dark else '#0550ae'};
+}}
+QLabel#labelError {{
+    color: {p['ACCENT3']};
+    font-size: 11px;
+    font-weight: bold;
+}}
+QLabel#labelSuccess {{
+    color: {p['ACCENT2']};
+    font-size: 11px;
+    font-weight: bold;
+}}
+QLabel#labelUserBadge {{
+    background: {p['INPUT']};
+    border: 1px solid {p['BORDER']};
+    border-radius: 12px;
+    padding: 3px 12px;
+    color: {p['ACCENT2']};
+    font-size: 11px;
+    font-weight: bold;
+}}
 """
-
 
 class MplCanvas(FigureCanvas):
     def __init__(self, parent=None, width=6, height=4):
@@ -287,7 +359,7 @@ class MplCanvas(FigureCanvas):
 
 
 class ParamCard(QFrame):
-    """Cartão estilizado para mostrar um valor numérico (ganho, métrica, etc.)."""
+    
 
     def __init__(self, label, unit="", parent=None):
         super().__init__(parent)
@@ -336,6 +408,327 @@ class ParamCard(QFrame):
         self.value_label.setText("—")
 
 
+
+class TabLogin(QWidget):
+
+    sig_login = pyqtSignal(str, str)
+    sig_register = pyqtSignal(str, str, str, int)
+    sig_logout = pyqtSignal()
+    sig_connect_db = pyqtSignal(str)  
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._logged_in = False
+        self._build_ui()
+
+    def _build_ui(self):
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+
+        self.stack = QStackedWidget()
+        outer.addWidget(self.stack)
+
+        self.stack.addWidget(self._build_login_page())     
+        self.stack.addWidget(self._build_register_page())  
+        self.stack.addWidget(self._build_logged_page())   
+
+    def _build_login_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setAlignment(Qt.AlignCenter)
+
+        card = QFrame()
+        card.setFixedWidth(420)
+        card_layout = QVBoxLayout(card)
+        card_layout.setSpacing(16)
+        card_layout.setContentsMargins(32, 32, 32, 32)
+
+        icon = QLabel("◈")
+        icon.setAlignment(Qt.AlignCenter)
+        icon.setStyleSheet("font-size: 36px;")
+
+        title = QLabel("C213  ·  PID CONTROLLER")
+        title.setObjectName("labelTitle")
+        title.setAlignment(Qt.AlignCenter)
+
+        sub = QLabel("Faça login para acessar o sistema")
+        sub.setObjectName("labelSub")
+        sub.setAlignment(Qt.AlignCenter)
+
+        sep = QFrame()
+        sep.setObjectName("separator")
+        sep.setFrameShape(QFrame.HLine)
+
+        self.input_login_uri = QLineEdit()
+        self.input_login_uri.setObjectName("loginInput")
+        self.input_login_uri.setPlaceholderText("URI MongoDB  (mongodb://localhost:27017)")
+        self.input_login_uri.setText("mongodb://localhost:27017")
+
+        self.input_login_user = QLineEdit()
+        self.input_login_user.setObjectName("loginInput")
+        self.input_login_user.setPlaceholderText("Username")
+
+        self.input_login_pass = QLineEdit()
+        self.input_login_pass.setObjectName("loginInput")
+        self.input_login_pass.setPlaceholderText("Senha")
+        self.input_login_pass.setEchoMode(QLineEdit.Password)
+
+        self.lbl_login_msg = QLabel("")
+        self.lbl_login_msg.setObjectName("labelError")
+        self.lbl_login_msg.setAlignment(Qt.AlignCenter)
+        self.lbl_login_msg.setWordWrap(True)
+
+        btn_login = QPushButton("Entrar")
+        btn_login.setObjectName("btnLogin")
+        btn_login.clicked.connect(self._on_login_click)
+
+        self.input_login_pass.returnPressed.connect(self._on_login_click)
+
+        btn_go_register = QPushButton("Não tem conta? Cadastre-se")
+        btn_go_register.setObjectName("btnLink")
+        btn_go_register.clicked.connect(lambda: self.stack.setCurrentIndex(1))
+
+        card_layout.addWidget(icon)
+        card_layout.addWidget(title)
+        card_layout.addWidget(sub)
+        card_layout.addWidget(sep)
+        card_layout.addSpacing(8)
+        card_layout.addWidget(QLabel("Conexão MongoDB:"))
+        card_layout.addWidget(self.input_login_uri)
+        card_layout.addSpacing(4)
+        card_layout.addWidget(QLabel("Username:"))
+        card_layout.addWidget(self.input_login_user)
+        card_layout.addWidget(QLabel("Senha:"))
+        card_layout.addWidget(self.input_login_pass)
+        card_layout.addSpacing(4)
+        card_layout.addWidget(self.lbl_login_msg)
+        card_layout.addWidget(btn_login)
+        card_layout.addWidget(btn_go_register)
+
+        layout.addWidget(card, alignment=Qt.AlignCenter)
+        return page
+
+
+    def _build_register_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setAlignment(Qt.AlignCenter)
+
+        card = QFrame()
+        card.setFixedWidth(420)
+        card_layout = QVBoxLayout(card)
+        card_layout.setSpacing(14)
+        card_layout.setContentsMargins(32, 32, 32, 32)
+
+        title = QLabel("CADASTRO")
+        title.setObjectName("labelTitle")
+        title.setAlignment(Qt.AlignCenter)
+
+        sub = QLabel("Crie sua conta para acessar o sistema")
+        sub.setObjectName("labelSub")
+        sub.setAlignment(Qt.AlignCenter)
+
+        sep = QFrame()
+        sep.setObjectName("separator")
+        sep.setFrameShape(QFrame.HLine)
+
+        self.input_reg_nome = QLineEdit()
+        self.input_reg_nome.setObjectName("loginInput")
+        self.input_reg_nome.setPlaceholderText("Nome completo")
+
+        self.input_reg_user = QLineEdit()
+        self.input_reg_user.setObjectName("loginInput")
+        self.input_reg_user.setPlaceholderText("Username (mín. 3 caracteres)")
+
+        self.input_reg_pass = QLineEdit()
+        self.input_reg_pass.setObjectName("loginInput")
+        self.input_reg_pass.setPlaceholderText("Senha (mín. 4 caracteres)")
+        self.input_reg_pass.setEchoMode(QLineEdit.Password)
+
+        self.input_reg_pass2 = QLineEdit()
+        self.input_reg_pass2.setObjectName("loginInput")
+        self.input_reg_pass2.setPlaceholderText("Confirmar senha")
+        self.input_reg_pass2.setEchoMode(QLineEdit.Password)
+
+        self.spin_reg_grupo = QDoubleSpinBox()
+        self.spin_reg_grupo.setRange(1, 20)
+        self.spin_reg_grupo.setDecimals(0)
+        self.spin_reg_grupo.setValue(7)
+        self.spin_reg_grupo.setPrefix("Grupo  ")
+
+        self.lbl_reg_msg = QLabel("")
+        self.lbl_reg_msg.setObjectName("labelError")
+        self.lbl_reg_msg.setAlignment(Qt.AlignCenter)
+        self.lbl_reg_msg.setWordWrap(True)
+
+        btn_register = QPushButton("Cadastrar")
+        btn_register.setObjectName("btnRegister")
+        btn_register.clicked.connect(self._on_register_click)
+
+        self.input_reg_pass2.returnPressed.connect(self._on_register_click)
+
+        btn_go_login = QPushButton("Já tem conta? Faça login")
+        btn_go_login.setObjectName("btnLink")
+        btn_go_login.clicked.connect(lambda: self.stack.setCurrentIndex(0))
+
+        card_layout.addWidget(title)
+        card_layout.addWidget(sub)
+        card_layout.addWidget(sep)
+        card_layout.addSpacing(4)
+        card_layout.addWidget(QLabel("Nome:"))
+        card_layout.addWidget(self.input_reg_nome)
+        card_layout.addWidget(QLabel("Username:"))
+        card_layout.addWidget(self.input_reg_user)
+        card_layout.addWidget(QLabel("Senha:"))
+        card_layout.addWidget(self.input_reg_pass)
+        card_layout.addWidget(QLabel("Confirmar:"))
+        card_layout.addWidget(self.input_reg_pass2)
+        card_layout.addWidget(QLabel("Grupo:"))
+        card_layout.addWidget(self.spin_reg_grupo)
+        card_layout.addSpacing(4)
+        card_layout.addWidget(self.lbl_reg_msg)
+        card_layout.addWidget(btn_register)
+        card_layout.addWidget(btn_go_login)
+
+        layout.addWidget(card, alignment=Qt.AlignCenter)
+        return page
+
+
+    def _build_logged_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setAlignment(Qt.AlignCenter)
+
+        card = QFrame()
+        card.setFixedWidth(420)
+        card_layout = QVBoxLayout(card)
+        card_layout.setSpacing(16)
+        card_layout.setContentsMargins(32, 40, 32, 40)
+
+        icon = QLabel("✓")
+        icon.setAlignment(Qt.AlignCenter)
+        icon.setStyleSheet("font-size: 48px; color: #3fb950;")
+
+        self.lbl_welcome = QLabel("Bem-vindo!")
+        self.lbl_welcome.setObjectName("labelTitle")
+        self.lbl_welcome.setAlignment(Qt.AlignCenter)
+
+        self.lbl_user_info = QLabel("")
+        self.lbl_user_info.setObjectName("labelSub")
+        self.lbl_user_info.setAlignment(Qt.AlignCenter)
+        self.lbl_user_info.setWordWrap(True)
+
+        sep = QFrame()
+        sep.setObjectName("separator")
+        sep.setFrameShape(QFrame.HLine)
+
+        info = QLabel(
+            "Você está autenticado. Use as abas acima para\n"
+            "acessar Identificação, Controle PID e Gráficos."
+        )
+        info.setAlignment(Qt.AlignCenter)
+        info.setObjectName("labelMuted")
+        info.setWordWrap(True)
+
+        btn_logout = QPushButton("Sair")
+        btn_logout.setObjectName("btnLogin")
+        btn_logout.setStyleSheet("")  # herdará do tema
+        btn_logout.clicked.connect(self._on_logout_click)
+
+        card_layout.addWidget(icon)
+        card_layout.addWidget(self.lbl_welcome)
+        card_layout.addWidget(self.lbl_user_info)
+        card_layout.addWidget(sep)
+        card_layout.addWidget(info)
+        card_layout.addSpacing(8)
+        card_layout.addWidget(btn_logout)
+
+        layout.addWidget(card, alignment=Qt.AlignCenter)
+        return page
+
+
+    def _on_login_click(self):
+        uri = self.input_login_uri.text().strip()
+        user = self.input_login_user.text().strip()
+        pw = self.input_login_pass.text()
+
+        if not user:
+            self.show_login_error("Informe o username.")
+            return
+        if not pw:
+            self.show_login_error("Informe a senha.")
+            return
+
+        self.sig_connect_db.emit(uri)
+        self.sig_login.emit(user, pw)
+
+    def _on_register_click(self):
+        nome = self.input_reg_nome.text().strip()
+        user = self.input_reg_user.text().strip()
+        pw = self.input_reg_pass.text()
+        pw2 = self.input_reg_pass2.text()
+        grupo = int(self.spin_reg_grupo.value())
+
+        if not user:
+            self.show_register_error("Informe o username.")
+            return
+        if not pw:
+            self.show_register_error("Informe a senha.")
+            return
+        if pw != pw2:
+            self.show_register_error("As senhas não coincidem.")
+            return
+
+        uri = self.input_login_uri.text().strip()
+        self.sig_connect_db.emit(uri)
+        self.sig_register.emit(user, pw, nome, grupo)
+
+    def _on_logout_click(self):
+        self.sig_logout.emit()
+        self.stack.setCurrentIndex(0)
+        self.input_login_pass.clear()
+        self.lbl_login_msg.clear()
+        self._logged_in = False
+
+
+    def show_login_error(self, msg):
+        self.lbl_login_msg.setObjectName("labelError")
+        self.lbl_login_msg.setStyleSheet(f"color: {palette()['ACCENT3']};")
+        self.lbl_login_msg.setText(msg)
+
+    def show_login_success(self, msg):
+        self.lbl_login_msg.setObjectName("labelSuccess")
+        self.lbl_login_msg.setStyleSheet(f"color: {palette()['ACCENT2']};")
+        self.lbl_login_msg.setText(msg)
+
+    def show_register_error(self, msg):
+        self.lbl_reg_msg.setObjectName("labelError")
+        self.lbl_reg_msg.setStyleSheet(f"color: {palette()['ACCENT3']};")
+        self.lbl_reg_msg.setText(msg)
+
+    def show_register_success(self, msg):
+        self.lbl_reg_msg.setObjectName("labelSuccess")
+        self.lbl_reg_msg.setStyleSheet(f"color: {palette()['ACCENT2']};")
+        self.lbl_reg_msg.setText(msg)
+
+    def set_logged_in(self, nome, grupo):
+        """Muda para a tela de boas-vindas pós-login."""
+        self._logged_in = True
+        self.lbl_welcome.setText(f"Bem-vindo, {nome}!")
+        self.lbl_user_info.setText(f"Grupo {grupo}  ·  Autenticado via MongoDB")
+        self.stack.setCurrentIndex(2)
+
+    def is_logged_in(self):
+        return self._logged_in
+
+    def get_uri(self):
+        return self.input_login_uri.text().strip()
+
+    def apply_theme(self):
+        pass
+
+
+
 class TabIdentificacao(QWidget):
     sig_load_file = pyqtSignal()
     sig_export = pyqtSignal()
@@ -346,7 +739,6 @@ class TabIdentificacao(QWidget):
         main_layout.setContentsMargins(12, 12, 12, 12)
         main_layout.setSpacing(12)
 
-        # ── Painel esquerdo ───────────────────────────────────────────
         left = QWidget()
         left.setFixedWidth(260)
         left_layout = QVBoxLayout(left)
@@ -364,7 +756,7 @@ class TabIdentificacao(QWidget):
         sep.setFrameShape(QFrame.HLine)
         left_layout.addWidget(sep)
 
-        # Dataset
+
         grp_file = QGroupBox("DATASET")
         grp_file_layout = QVBoxLayout(grp_file)
         self.btn_load = QPushButton("📂  Escolher Arquivo .mat")
@@ -376,7 +768,7 @@ class TabIdentificacao(QWidget):
         grp_file_layout.addWidget(self.label_file)
         left_layout.addWidget(grp_file)
 
-        # Parâmetros FOPDT
+
         grp_params = QGroupBox("PARÂMETROS FOPDT")
         grp_params_layout = QGridLayout(grp_params)
         grp_params_layout.setSpacing(8)
@@ -392,7 +784,7 @@ class TabIdentificacao(QWidget):
         grp_params_layout.addWidget(self.card_eqm,   1, 1)
         left_layout.addWidget(grp_params)
 
-        # Info do experimento
+
         grp_info = QGroupBox("EXPERIMENTO")
         grp_info_layout = QGridLayout(grp_info)
         grp_info_layout.setSpacing(8)
@@ -413,7 +805,7 @@ class TabIdentificacao(QWidget):
         left_layout.addWidget(self.btn_export)
         left_layout.addStretch()
 
-        # ── Gráfico ──────────────────────────────────────────────────
+
         right = QWidget()
         right_layout = QVBoxLayout(right)
         right_layout.setContentsMargins(0, 0, 0, 0)
@@ -428,7 +820,7 @@ class TabIdentificacao(QWidget):
         main_layout.addWidget(left)
         main_layout.addWidget(right, stretch=1)
 
-        # Sinais
+
         self.btn_load.clicked.connect(self.sig_load_file.emit)
         self.btn_export.clicked.connect(self.sig_export.emit)
 
@@ -470,8 +862,8 @@ class TabIdentificacao(QWidget):
 class TabControlePID(QWidget):
     sig_tune = pyqtSignal()
     sig_export = pyqtSignal()
-    sig_method_changed = pyqtSignal()  # combo IMC/ITAE alterado em modo Método
-    sig_lambda_changed = pyqtSignal()  # λ alterado pelo usuário
+    sig_method_changed = pyqtSignal()  
+    sig_lambda_changed = pyqtSignal()  
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -479,7 +871,7 @@ class TabControlePID(QWidget):
         main_layout.setContentsMargins(12, 12, 12, 12)
         main_layout.setSpacing(12)
 
-        # ── Painel esquerdo ───────────────────────────────────────────
+
         left = QWidget()
         left.setFixedWidth(280)
         left_layout = QVBoxLayout(left)
@@ -497,7 +889,7 @@ class TabControlePID(QWidget):
         sep.setFrameShape(QFrame.HLine)
         left_layout.addWidget(sep)
 
-        # Modo de sintonia
+
         grp_sel = QGroupBox("MODO DE SINTONIA")
         grp_sel_layout = QVBoxLayout(grp_sel)
 
@@ -516,7 +908,7 @@ class TabControlePID(QWidget):
         grp_sel_layout.addWidget(self.radio_manual)
         left_layout.addWidget(grp_sel)
 
-        # Parâmetros PID
+
         grp_pid = QGroupBox("PARÂMETROS PID")
         grp_pid_layout = QGridLayout(grp_pid)
         grp_pid_layout.setSpacing(8)
@@ -574,7 +966,7 @@ class TabControlePID(QWidget):
         grp_ctrl_layout.addWidget(self.card_ess,   3, 1)
         left_layout.addWidget(grp_ctrl)
 
-        # Botões
+
         self.btn_tune = QPushButton("⚙️  Sintonizar")
         self.btn_tune.setObjectName("btnGreen")
         self.btn_tune.setEnabled(False)
@@ -585,7 +977,7 @@ class TabControlePID(QWidget):
         left_layout.addWidget(self.btn_export)
         left_layout.addStretch()
 
-        # ── Gráfico ──────────────────────────────────────────────────
+
         right = QWidget()
         right_layout = QVBoxLayout(right)
         right_layout.setContentsMargins(0, 0, 0, 0)
@@ -600,7 +992,7 @@ class TabControlePID(QWidget):
         main_layout.addWidget(left)
         main_layout.addWidget(right, stretch=1)
 
-        # Sinais
+
         self.btn_tune.clicked.connect(self.sig_tune.emit)
         self.btn_export.clicked.connect(self.sig_export.emit)
         self.radio_method.toggled.connect(self._on_mode_changed)
@@ -609,28 +1001,24 @@ class TabControlePID(QWidget):
 
         self._on_mode_changed()
 
-    # ── Comportamento de UI ───────────────────────────────────────────
     def _on_mode_changed(self, *_):
         is_method = self.radio_method.isChecked()
         is_itae = self.combo_method.currentText() == "ITAE"
 
-        # combo sempre ativo
+
         self.combo_method.setEnabled(True)
-        # Kp/Ti/Td só editável em modo manual
         for s in (self.spin_Kp, self.spin_Ti, self.spin_Td):
             s.setReadOnly(is_method)
 
-        # λ
         if is_itae:
-            # ITAE: λ não se aplica
             self.spin_lam.setEnabled(False)
             self.spin_lam.setSpecialValueText("N/A")
-            # forçar mostrar N/A:
+
             self.spin_lam.blockSignals(True)
             self.spin_lam.setValue(self.spin_lam.minimum())
             self.spin_lam.blockSignals(False)
         else:
-            # IMC: λ editável (parâmetro de projeto)
+
             self.spin_lam.setEnabled(True)
             self.spin_lam.setSpecialValueText("")
             self.spin_lam.blockSignals(True)
@@ -638,12 +1026,11 @@ class TabControlePID(QWidget):
                 self.spin_lam.setValue(self._lam_saved)
             self.spin_lam.blockSignals(False)
 
-        # se mudamos para método, recalcula automaticamente
+
         if is_method:
             self.sig_method_changed.emit()
 
     def _on_combo_changed(self, *_):
-        # ao mudar IMC↔ITAE, ajusta UI e (se modo método) emite recálculo
         self._on_mode_changed()
 
     def _on_lambda_changed(self, *_):
@@ -655,7 +1042,7 @@ class TabControlePID(QWidget):
             if self.radio_method.isChecked() and self.combo_method.currentText() == "IMC":
                 self.sig_lambda_changed.emit()
 
-    # ── Tema ─────────────────────────────────────────────────────────
+
     def _apply_toolbar_theme(self):
         p = palette()
         self._toolbar.setStyleSheet(
@@ -668,7 +1055,6 @@ class TabControlePID(QWidget):
         for c in (self.card_tr, self.card_ts, self.card_mp, self.card_ess):
             c.apply_theme()
 
-    # ── API para o controller ────────────────────────────────────────
     def set_pid_params(self, Kp, Ti, Td):
         self.spin_Kp.blockSignals(True)
         self.spin_Ti.blockSignals(True)
@@ -750,7 +1136,6 @@ class TabGraficos(QWidget):
         sep.setFrameShape(QFrame.HLine)
         layout.addWidget(sep)
 
-        # Dois gráficos lado a lado
         plots = QHBoxLayout()
         plots.setSpacing(12)
 
@@ -795,7 +1180,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self._is_dark = True
-        self._theme_callback = None  # callback opcional p/ controller redesenhar plots
+        self._theme_callback = None  
         self.setWindowTitle("C213  ·  Identificação & Controle PID  ·  Grupo 7")
         self.setMinimumSize(1180, 720)
         self.setStyleSheet(build_stylesheet(DARK_PALETTE))
@@ -806,7 +1191,6 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── Header bar ───────────────────────────────────────────────
         self._header_bar = QFrame()
         self._header_bar.setFixedHeight(48)
         hb_layout = QHBoxLayout(self._header_bar)
@@ -829,24 +1213,32 @@ class MainWindow(QMainWindow):
 
         self._style_header(DARK_PALETTE)
 
-        # ── Tabs ─────────────────────────────────────────────────────
         self.tabs = QTabWidget()
+        self.tab_login = TabLogin()
         self.tab_ident = TabIdentificacao()
         self.tab_pid = TabControlePID()
         self.tab_graf = TabGraficos()
 
+        self.tabs.addTab(self.tab_login, "  LOGIN  ")
         self.tabs.addTab(self.tab_ident, "  IDENTIFICAÇÃO  ")
         self.tabs.addTab(self.tab_pid,   "  CONTROLE PID   ")
         self.tabs.addTab(self.tab_graf,  "  GRÁFICOS       ")
 
+        for i in (1, 2, 3):
+            self.tabs.setTabEnabled(i, False)
+
         root.addWidget(self.tabs, stretch=1)
+
+        self._user_badge = QLabel("")
+        self._user_badge.setObjectName("labelUserBadge")
+        self._user_badge.setVisible(False)
+        hb_layout.insertWidget(3, self._user_badge)
 
         # Status bar
         self.status = QStatusBar()
         self.setStatusBar(self.status)
-        self.status.showMessage("Pronto  |  Carregue um arquivo .mat para começar")
+        self.status.showMessage("Pronto  |  Faça login para começar")
 
-    # ── Header style helper ──────────────────────────────────────────
     def _style_header(self, p):
         self._header_bar.setStyleSheet(
             f"background:{p['CARD']}; border-bottom:1px solid {p['BORDER']};"
@@ -858,7 +1250,6 @@ class MainWindow(QMainWindow):
             f"color:{p['MUTED']}; font-size:11px; letter-spacing:2px;"
         )
 
-    # ── Toggle de tema ───────────────────────────────────────────────
     def _toggle_theme(self):
         self._is_dark = not self._is_dark
         new_palette = DARK_PALETTE if self._is_dark else LIGHT_PALETTE
@@ -868,19 +1259,18 @@ class MainWindow(QMainWindow):
         set_palette(p)
         self.setStyleSheet(build_stylesheet(p))
         self._style_header(p)
+        self.tab_login.apply_theme()
         self.tab_ident.apply_theme()
         self.tab_pid.apply_theme()
         self.tab_graf.apply_theme()
         self._btn_theme.setText("🌙  Dark" if not self._is_dark else "☀  Light")
-        # notificar controller para redesenhar gráficos com as novas cores
         if self._theme_callback is not None:
             self._theme_callback()
 
     def set_theme_callback(self, cb):
-        """Registra callback para ser chamado após troca de tema."""
+
         self._theme_callback = cb
 
-    # ── Mensagens ────────────────────────────────────────────────────
     def show_error(self, msg):
         QMessageBox.critical(self, "Erro", msg)
 
@@ -892,3 +1282,18 @@ class MainWindow(QMainWindow):
 
     def set_status(self, msg):
         self.status.showMessage(msg)
+
+    def unlock_tabs(self, nome, grupo):
+
+        for i in (1, 2, 3):
+            self.tabs.setTabEnabled(i, True)
+        self._user_badge.setText(f"👤  {nome}  ·  Grupo {grupo}")
+        self._user_badge.setVisible(True)
+        self.tabs.setCurrentIndex(1)
+
+    def lock_tabs(self):
+        for i in (1, 2, 3):
+            self.tabs.setTabEnabled(i, False)
+        self._user_badge.setVisible(False)
+        self.tabs.setCurrentIndex(0)
+        self.set_status("Sessão encerrada  |  Faça login para continuar")
