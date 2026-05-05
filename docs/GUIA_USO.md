@@ -10,15 +10,36 @@ Execute:
 python3 main.py
 ```
 
-A janela será aberta com três abas principais:
+A janela será aberta com quatro abas principais:
 
-1. **Identificação**;
-2. **Controle PID**;
-3. **Gráficos**.
+1. **Login**;
+2. **Identificação**;
+3. **Controle PID**;
+4. **Gráficos**.
 
 O cabeçalho da IHM identifica o projeto como **C213 - PID Controller** e informa o **Grupo 7** com os métodos **Smith + IMC + ITAE**.
 
-## 2. Aba Identificação
+## 2. Aba Login
+
+### Objetivo
+
+Autenticar o usuário antes de liberar as abas de Identificação, Controle PID e Gráficos.
+
+### Passos para login
+
+1. Verifique a URI em **Conexão MongoDB**. O padrão é `mongodb://localhost:27017`.
+2. Informe o `username` e a senha.
+3. Clique em **Entrar**.
+4. Após login válido, as demais abas ficam habilitadas.
+
+### Cadastro
+
+1. Clique em **Não tem conta? Cadastre-se**.
+2. Informe nome, username, senha, confirmação de senha e grupo.
+3. Clique em **Cadastrar**.
+4. Volte para a tela de login e autentique com o usuário criado.
+
+## 3. Aba Identificação
 
 ### Objetivo
 
@@ -62,7 +83,7 @@ O gráfico apresenta:
 
 Quanto mais próxima a curva do modelo estiver da curva real, melhor é a aproximação FOPDT para o dataset.
 
-## 3. Aba Controle PID
+## 4. Aba Controle PID
 
 ### Objetivo
 
@@ -100,7 +121,7 @@ No ITAE, o parâmetro `λ` não é usado. Por isso, a interface exibe `N/A` no c
 
 No modo manual, se a malha fechada for instável, a simulação é bloqueada e a IHM mostra os polos instáveis.
 
-## 4. Métricas exibidas
+## 5. Métricas exibidas
 
 | Campo | Significado |
 |---|---|
@@ -111,7 +132,7 @@ No modo manual, se a malha fechada for instável, a simulação é bloqueada e a
 
 A faixa ao redor do setpoint representa a banda visual de ±2%.
 
-## 5. Aba Gráficos
+## 6. Aba Gráficos
 
 ### Objetivo
 
@@ -139,7 +160,7 @@ O gráfico da direita mostra:
 - setpoint;
 - faixa de ±2%.
 
-## 6. Exportação de gráficos
+## 7. Exportação de gráficos
 
 Na aba **Identificação**, o botão **Exportar Gráfico** salva o gráfico de identificação.
 
@@ -155,6 +176,6 @@ Formatos disponíveis:
 - `.png`;
 - `.pdf`.
 
-## 7. Alternância de tema
+## 8. Alternância de tema
 
 O botão no canto superior direito alterna entre tema escuro e tema claro. Os gráficos são redesenhados para acompanhar a paleta ativa.

@@ -7,8 +7,9 @@ Este documento descreve os arquivos principais do projeto, suas responsabilidade
 | Módulo | Responsabilidade |
 |---|---|
 | `main.py` | inicialização da aplicação Qt |
-| `app/views/main_window.py` | construção da IHM, abas, estilos, temas, cartões e gráficos |
-| `app/controllers/main_controller.py` | conexão entre eventos da IHM e rotinas matemáticas |
+| `app/views/main_window.py` | construção da IHM, Login, abas, estilos, temas, cartões e gráficos |
+| `app/controllers/main_controller.py` | conexão entre eventos da IHM, autenticação e rotinas matemáticas |
+| `app/models/auth.py` | conexão com MongoDB, cadastro, login, logout e hash de senha |
 | `app/models/identification.py` | identificação FOPDT pelo método de Smith, simulação FOPDT e cálculo de EQM |
 | `app/models/pid_tuning.py` | sintonia IMC, sintonia ITAE, aproximação de Padé, funções de transferência, simulações e métricas |
 | `requirements.txt` | dependências Python do projeto |
@@ -26,6 +27,35 @@ controller = MainController(view)
 view.show()
 sys.exit(app.exec_())
 ```
+
+
+## `app/models/auth.py`
+
+Contém a classe `AuthManager`, responsável pela autenticação e persistência dos usuários no MongoDB.
+
+### `AuthManager(uri="mongodb://localhost:27017", db_name="C213")`
+
+Inicializa o gerenciador de autenticação com URI do MongoDB, nome do banco `C213` e coleção `usuarios`.
+
+### `connect()`
+
+Cria a conexão com o MongoDB usando `pymongo.MongoClient`, verifica se o servidor responde e cria um índice único para o campo `username`.
+
+### `_hash_password(password, salt=None)`
+
+Gera o hash da senha usando SHA-256 com `salt` aleatório. O banco armazena o hash e o `salt`, não a senha em texto puro.
+
+### `register(username, password, nome="", grupo=7)`
+
+Valida username e senha, verifica se o usuário já existe, gera hash da senha e insere o documento na coleção `usuarios`.
+
+### `login(username, password)`
+
+Busca o usuário no banco, recalcula o hash usando o `salt` salvo e compara com o hash armazenado. Em caso de sucesso, atualiza `ultimo_acesso` e define `current_user`.
+
+### `logout()`
+
+Remove o usuário atual da sessão local da aplicação.
 
 ## `app/models/identification.py`
 
@@ -235,11 +265,16 @@ Controla o fluxo da aplicação.
 | `y` | vetor de saída |
 | `params` | parâmetros identificados pelo método de Smith |
 | `last_sim` | última simulação em malha fechada |
+| `auth` | instância de `AuthManager` usada para login, cadastro e logout |
 
 ### Sinais conectados
 
 | Origem | Sinal | Destino |
 |---|---|---|
+| `tab_login` | `sig_connect_db` | `_connect_db()` |
+| `tab_login` | `sig_login` | `_do_login()` |
+| `tab_login` | `sig_register` | `_do_register()` |
+| `tab_login` | `sig_logout` | `_do_logout()` |
 | `tab_ident` | `sig_load_file` | `load_dataset()` |
 | `tab_ident` | `sig_export` | `_export_ident()` |
 | `tab_pid` | `sig_tune` | `simulate_pid()` |
@@ -248,6 +283,22 @@ Controla o fluxo da aplicação.
 | `tab_pid` | `sig_export` | `_export_pid()` |
 | `tab_graf` | `sig_compare` | `compare_plots()` |
 | `tab_graf` | `sig_export` | `_export_compare()` |
+
+### `_connect_db()`
+
+Conecta a aplicação ao MongoDB a partir da URI informada na aba Login.
+
+### `_do_login()`
+
+Valida usuário e senha com `AuthManager`. Quando o login é aceito, chama `unlock_tabs()` e libera as abas de Identificação, Controle PID e Gráficos.
+
+### `_do_register()`
+
+Cadastra um novo usuário no MongoDB usando `AuthManager.register()`.
+
+### `_do_logout()`
+
+Encerra a sessão local e chama `lock_tabs()` para bloquear novamente as abas principais.
 
 ### `load_dataset()`
 
@@ -290,10 +341,21 @@ Define a IHM principal.
 |---|---|
 | `MplCanvas` | encapsula `FigureCanvas` e aplica estilo aos gráficos |
 | `ParamCard` | cartão usado para exibir valores numéricos |
+| `TabLogin` | aba de login, cadastro, conexão MongoDB e tela de usuário autenticado |
 | `TabIdentificacao` | aba de carregamento, identificação e parâmetros FOPDT |
 | `TabControlePID` | aba de sintonia, setpoint, tempo de simulação e métricas |
 | `TabGraficos` | aba de comparação entre malha aberta e malha fechada |
 | `MainWindow` | janela principal com header, abas, status bar e alternância de tema |
+
+### Aba Login
+
+Exibe:
+
+- campo de URI do MongoDB;
+- campos de username e senha;
+- fluxo de cadastro de usuário;
+- mensagem de boas-vindas após autenticação;
+- botão de logout.
 
 ### Aba Identificação
 
@@ -322,3 +384,8 @@ Exibe:
 
 - gráfico de malha aberta, com resposta natural da planta;
 - gráfico de malha fechada, comparando IMC e ITAE.
+
+
+### Bloqueio de abas
+
+A janela principal inicia com as abas **Identificação**, **Controle PID** e **Gráficos** bloqueadas. Após login válido, `unlock_tabs()` habilita essas abas e exibe o usuário autenticado no cabeçalho. Ao fazer logout, `lock_tabs()` bloqueia novamente o acesso.

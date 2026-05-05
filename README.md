@@ -1,10 +1,10 @@
 # C213 - PID Controller
 
-Projeto desenvolvido para a disciplina **C213 - Sistemas de Controle Automático**. A aplicação realiza identificação de uma planta em malha aberta, sintonia de controladores PID e comparação entre respostas em malha aberta e malha fechada por meio de uma IHM em Python.
+Projeto desenvolvido para a disciplina **C213 - Sistemas Embarcados**. A aplicação realiza identificação de uma planta em malha aberta, sintonia de controladores PID e comparação entre respostas em malha aberta e malha fechada por meio de uma IHM em Python com autenticação de usuários via MongoDB.
 
 **Grupo:** 7  
 **Métodos de sintonia do grupo:** IMC e ITAE  
-**Arquitetura:** MVC, com separação entre interface, controlador e módulos matemáticos
+**Arquitetura:** MVC, com separação entre interface, controlador, módulos matemáticos e autenticação
 
 ## Integrantes
 
@@ -16,20 +16,23 @@ Projeto desenvolvido para a disciplina **C213 - Sistemas de Controle Automático
 
 ## Objetivo
 
-O objetivo do projeto é integrar identificação de sistemas e controle PID em uma aplicação computacional capaz de:
+O objetivo do projeto é integrar identificação de sistemas, controle PID e autenticação de usuários em uma aplicação computacional capaz de:
 
-1. carregar datasets experimentais em formato `.mat`;
-2. identificar automaticamente uma planta por um modelo FOPDT usando o método de Smith;
-3. sintonizar controladores PID pelos métodos IMC e ITAE, definidos para o Grupo 7;
-4. simular a resposta em malha fechada para um setpoint configurável;
-5. calcular métricas de desempenho, como tempo de subida, tempo de acomodação, sobressinal e erro em regime permanente;
-6. comparar a resposta natural da planta com as respostas controladas por IMC e ITAE;
-7. exportar os gráficos gerados pela IHM.
+1. autenticar usuários por login e cadastro com persistência em MongoDB;
+2. carregar datasets experimentais em formato `.mat`;
+3. identificar automaticamente uma planta por um modelo FOPDT usando o método de Smith;
+4. sintonizar controladores PID pelos métodos IMC e ITAE, definidos para o Grupo 7;
+5. simular a resposta em malha fechada para um setpoint configurável;
+6. calcular métricas de desempenho, como tempo de subida, tempo de acomodação, sobressinal e erro em regime permanente;
+7. comparar a resposta natural da planta com as respostas controladas por IMC e ITAE;
+8. exportar os gráficos gerados pela IHM.
 
 ## Funcionalidades
 
 | Área | Funcionalidade |
 |---|---|
+| Autenticação | Login, cadastro e logout com usuários armazenados no MongoDB |
+| Banco de dados | Conexão configurável por URI e uso da coleção `usuarios` |
 | Dataset | Leitura de arquivos MATLAB `.mat` contendo tempo, entrada e saída |
 | Identificação | Identificação automática FOPDT pelo método de Smith logo após carregar o arquivo |
 | Experimento | Exibição de `u0`, `uf`, `y∞` e `t_d` na aba de identificação |
@@ -42,7 +45,7 @@ O objetivo do projeto é integrar identificação de sistemas e controle PID em 
 | Visualização | Gráficos interativos com Matplotlib integrado ao PyQt5 |
 | Comparação | Gráficos lado a lado: malha aberta e IMC × ITAE |
 | Exportação | Salvamento de gráficos em PNG ou PDF |
-| Interface | Tema escuro e tema claro com botão de alternância |
+| Interface | Aba de Login, abas bloqueadas antes da autenticação, tema escuro e tema claro |
 
 ## Estrutura do projeto
 
@@ -54,6 +57,7 @@ C213/
 │  │  └─ main_controller.py
 │  ├─ models/
 │  │  ├─ __init__.py
+│  │  ├─ auth.py
 │  │  ├─ identification.py
 │  │  └─ pid_tuning.py
 │  └─ views/
@@ -63,12 +67,15 @@ C213/
 │  ├─ GUIA_USO.md
 │  ├─ MATEMATICA_CONTROLE.md
 │  ├─ MODULOS.md
-│  └─ img/
-│     ├─ figura_01_identificacao_smith.png
-│     ├─ figura_02_controle_pid_imc.png
-│     ├─ figura_03_comparacao_imc.png
+│  └─ assets/
+│     ├─ figura_01_login.png
+│     ├─ figura_02_identificacao_smith.png
+│     ├─ figura_03_controle_pid_imc.png
 │     ├─ figura_04_controle_pid_itae.png
-│     └─ figura_05_comparacao_itae.png
+│     ├─ figura_05_controle_pid_manual.png
+│     ├─ figura_06_imc_lambda_menor.png
+│     ├─ figura_07_imc_lambda_maior.png
+│     └─ figura_08_comparacao_imc_itae.png
 ├─ main.py
 ├─ requirements.txt
 ├─ README.md
@@ -77,9 +84,9 @@ C213/
 
 | Camada | Arquivos | Responsabilidade |
 |---|---|---|
-| View | `app/views/main_window.py` | IHM, abas, campos, botões, cartões, temas e gráficos |
-| Controller | `app/controllers/main_controller.py` | Carregamento de dados, conexão entre eventos da IHM e funções matemáticas, atualização dos gráficos |
-| Model | `app/models/identification.py` e `app/models/pid_tuning.py` | Identificação FOPDT, sintonia PID, funções de transferência, simulação e métricas |
+| View | `app/views/main_window.py` | IHM, Login, abas, campos, botões, cartões, temas e gráficos |
+| Controller | `app/controllers/main_controller.py` | Autenticação, carregamento de dados, conexão entre eventos da IHM e funções matemáticas, atualização dos gráficos |
+| Model | `app/models/auth.py`, `app/models/identification.py` e `app/models/pid_tuning.py` | Autenticação com MongoDB, identificação FOPDT, sintonia PID, funções de transferência, simulação e métricas |
 | Entrada | `main.py` | Inicialização do `QApplication`, criação da janela principal e criação do Controller |
 
 ## Instalação e execução
@@ -114,9 +121,20 @@ PyQt5>=5.15.0
 numpy>=1.21.0
 scipy>=1.7.0
 matplotlib>=3.4.0
+pymongo>=3.12.0
 ```
 
-### 3. Executar a aplicação
+### 3. Banco de dados
+
+A autenticação usa MongoDB. Por padrão, a IHM tenta conectar em:
+
+```text
+mongodb://localhost:27017
+```
+
+O banco utilizado é `C213` e a coleção de usuários é `usuarios`. A URI pode ser alterada na aba **Login**.
+
+### 4. Executar a aplicação
 
 ```bash
 python3 main.py
@@ -143,19 +161,23 @@ Após o carregamento, o programa executa a identificação automaticamente. Não
 
 ## Fluxo de uso
 
-1. Abrir a aba **Identificação**.
-2. Clicar em **Escolher Arquivo .mat**.
-3. Selecionar o dataset experimental.
-4. Aguardar a identificação automática pelo método de Smith.
-5. Verificar os parâmetros FOPDT: `k`, `τ`, `θ` e `EQM`.
-6. Verificar os dados do experimento: `u0`, `uf`, `y∞` e `t_d`.
-7. Abrir a aba **Controle PID**.
-8. Escolher **IMC**, **ITAE** ou modo **Manual**.
-9. Ajustar `SP`, `t_sim` e, no caso do IMC, `λ`.
-10. Clicar em **Sintonizar**.
-11. Analisar a resposta em malha fechada e as métricas.
-12. Abrir a aba **Gráficos** e clicar em **Atualizar Comparação**.
-13. Exportar os gráficos, se necessário.
+1. Abrir a aba **Login**.
+2. Informar a URI do MongoDB, usuário e senha.
+3. Cadastrar um usuário, caso ainda não exista conta.
+4. Fazer login para liberar as abas de Identificação, Controle PID e Gráficos.
+5. Abrir a aba **Identificação**.
+6. Clicar em **Escolher Arquivo .mat**.
+7. Selecionar o dataset experimental.
+8. Aguardar a identificação automática pelo método de Smith.
+9. Verificar os parâmetros FOPDT: `k`, `τ`, `θ` e `EQM`.
+10. Verificar os dados do experimento: `u0`, `uf`, `y∞` e `t_d`.
+11. Abrir a aba **Controle PID**.
+12. Escolher **IMC**, **ITAE** ou modo **Manual**.
+13. Ajustar `SP`, `t_sim` e, no caso do IMC, `λ`.
+14. Clicar em **Sintonizar**.
+15. Analisar a resposta em malha fechada e as métricas.
+16. Abrir a aba **Gráficos** e clicar em **Atualizar Comparação**.
+17. Exportar os gráficos, se necessário.
 
 ## Modelo matemático
 
@@ -302,23 +324,23 @@ Se a malha fechada estiver instável no modo manual, a simulação é bloqueada.
 
 ## IHM e resultados
 
-### Figura 1 - Identificação por Smith
+### Figura 1 - Login e conexão com MongoDB
 
-![Figura 1 - Identificação por Smith](docs/assets/figura_01_identificacao_smith.png)
+![Figura 1 - Login e conexão com MongoDB](docs/assets/figura_01_login.png)
 
-A Figura 1 mostra a aba **Identificação**, com carregamento do dataset, parâmetros FOPDT, dados do experimento e gráfico com os pontos de 28,3% e 63,2% usados pelo método de Smith.
+A Figura 1 mostra a aba **Login**, usada para informar a URI do MongoDB, autenticar o usuário ou acessar a tela de cadastro.
 
-### Figura 2 - Controle PID com IMC
+### Figura 2 - Identificação por Smith
 
-![Figura 2 - Controle PID com IMC](docs/assets/figura_02_controle_pid_imc.png)
+![Figura 2 - Identificação por Smith](docs/assets/figura_02_identificacao_smith.png)
 
-A Figura 2 mostra a resposta em malha fechada usando sintonia IMC. O campo `λ` permanece habilitado por ser o parâmetro de projeto do método.
+A Figura 2 mostra a aba **Identificação**, com carregamento do dataset, parâmetros FOPDT, dados do experimento e gráfico com os pontos de 28,3% e 63,2% usados pelo método de Smith.
 
-### Figura 3 - Comparação com IMC
+### Figura 3 - Controle PID com IMC
 
-![Figura 3 - Comparação com IMC](docs/assets/figura_03_comparacao_imc.png)
+![Figura 3 - Controle PID com IMC](docs/assets/figura_03_controle_pid_imc.png)
 
-A Figura 3 mostra a aba **Gráficos**, com a resposta natural em malha aberta e a comparação das respostas em malha fechada.
+A Figura 3 mostra a resposta em malha fechada usando sintonia IMC. O campo `λ` permanece habilitado por ser o parâmetro de projeto do método.
 
 ### Figura 4 - Controle PID com ITAE
 
@@ -326,11 +348,29 @@ A Figura 3 mostra a aba **Gráficos**, com a resposta natural em malha aberta e 
 
 A Figura 4 mostra a resposta em malha fechada usando sintonia ITAE. Nesse método, o campo `λ` aparece como `N/A`.
 
-### Figura 5 - Comparação com ITAE
+### Figura 5 - Controle PID manual
 
-![Figura 5 - Comparação com ITAE](docs/assets/figura_05_comparacao_itae.png)
+![Figura 5 - Controle PID manual](docs/assets/figura_05_controle_pid_manual.png)
 
-A Figura 5 mostra a comparação após seleção do método ITAE, mantendo a visualização entre malha aberta e malha fechada.
+A Figura 5 mostra o modo manual, no qual os valores de `Kp`, `Ti` e `Td` podem ser inseridos diretamente para avaliar ajustes específicos.
+
+### Figura 6 - IMC com λ menor
+
+![Figura 6 - IMC com λ menor](docs/assets/figura_06_imc_lambda_menor.png)
+
+A Figura 6 ilustra uma resposta IMC com `λ` menor, resultando em resposta mais rápida e mais oscilatória.
+
+### Figura 7 - IMC com λ maior
+
+![Figura 7 - IMC com λ maior](docs/assets/figura_07_imc_lambda_maior.png)
+
+A Figura 7 ilustra uma resposta IMC com `λ` maior, resultando em resposta mais lenta e mais conservadora.
+
+### Figura 8 - Comparação Malha aberta × Malha fechada
+
+![Figura 8 - Comparação Malha aberta × Malha fechada](docs/assets/figura_08_comparacao_imc_itae.png)
+
+A Figura 8 mostra a aba **Gráficos**, com a resposta natural em malha aberta e a comparação das respostas em malha fechada para IMC e ITAE.
 
 ## Documentação complementar
 
