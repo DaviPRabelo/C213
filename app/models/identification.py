@@ -9,26 +9,28 @@ def identify_smith(t, u, y):
     y = np.asarray(y).squeeze()
 
     # Detectar instante do degrau
-    du = np.diff(u)
+    du = np.diff(u) # Δu_i = u[i] - u[i-1]
     idx_step_candidates = np.where(np.abs(du) > 1e-9)[0]
     if len(idx_step_candidates) == 0:
         raise ValueError("Não foi detectado um degrau na entrada.")
     idx_step = int(idx_step_candidates[0]) + 1
     t_step = float(t[idx_step])
 
-    # Valores de regime
+    # Valores inicial e final da entrada
     u0 = float(u[0])
     u1 = float(u[-1])
-    delta_u = u1 - u0
+    delta_u = u1 - u0 # Δu = u1 - u0
     if abs(delta_u) < 1e-9:
         raise ValueError("Variação de entrada Δu é nula.")
 
+    # Valores inicial e final da saída
     y0 = float(np.mean(y[:idx_step])) if idx_step > 0 else float(y[0])
     n_tail = max(5, len(y) // 10)
     y_inf = float(np.mean(y[-n_tail:]))
-    delta_y = y_inf - y0
+    delta_y = y_inf - y0 # Δy = y_inf - y0
 
-    k = delta_y / delta_u
+    # Ganho estático
+    k = delta_y / delta_u # k = Δy / Δu
 
     # Tempos t1 (28.3%) e t2 (63.2%)
     y_283 = y0 + 0.283 * delta_y
@@ -37,6 +39,7 @@ def identify_smith(t, u, y):
     t_search = t[idx_step:]
     y_search = y[idx_step:]
 
+    # Interpolação linear para obter t1 e t2
     if delta_y < 0:
         t1 = float(np.interp(-y_283, -y_search, t_search))
         t2 = float(np.interp(-y_632, -y_search, t_search))
@@ -44,12 +47,15 @@ def identify_smith(t, u, y):
         t1 = float(np.interp(y_283, y_search, t_search))
         t2 = float(np.interp(y_632, y_search, t_search))
 
+    # Tempos relativos ao instante do degrau
     t1_rel = t1 - t_step
     t2_rel = t2 - t_step
 
+    # Parâmetros FOPDT pelo método de Smith
     tau = 1.5 * (t2_rel - t1_rel)
     theta = t2_rel - tau
 
+    # Proteções para manter o modelo físico
     if tau <= 0:
         tau = 1e-3
     if theta < 0:
@@ -74,13 +80,18 @@ def simulate_fopdt(t, u, k, tau, theta, u0=0.0, y0=0.0):
     if tau <= 0:
         tau = 1e-6
 
-    sys = lti([k], [tau, 1])
-    u_shifted = u - u0
+    # Parte sem atraso do FOPDT
+    sys = lti([k], [tau, 1]) # G0(s) = k / (tau*s + 1)
+    
+    # Entrada em variável de desvio
+    u_shifted = u - u0 # u_d(t) = u(t) - u0
     _, y_no_delay, _ = lsim(sys, U=u_shifted, T=t)
 
+    # Atraso de transporte por deslocamento
+    # n_theta ≈ theta / Δt
     if len(t) > 1:
         dt = t[1] - t[0]
-        n_delay = int(round(theta / dt)) if dt > 0 else 0
+        n_delay = int(round(theta / dt)) if dt > 0 else 0 
     else:
         n_delay = 0
 
@@ -94,11 +105,14 @@ def simulate_fopdt(t, u, k, tau, theta, u0=0.0, y0=0.0):
     else:
         y_sim = y_no_delay
 
-    return y_sim + y0
+    # Saída
+    return y_sim + y0 # y(t) = y0 + y_d(t)
 
 
 def compute_eqm(t, u, y_real, k, tau, theta, u0=0.0, y0=0.0):
-    """RMSE entre modelo FOPDT identificado e dados experimentais."""
+    
     y_sim = simulate_fopdt(t, u, k, tau, theta, u0=u0, y0=y0)
     n = len(y_real)
-    return float(np.sqrt(np.sum((y_sim - y_real) ** 2) / n))
+    
+    # Erro quadrático médio
+    return float(np.sum((y_sim - y_real) ** 2) / n) # EQM = (1/N) * Σ(y_sim[i] - y_real[i])²

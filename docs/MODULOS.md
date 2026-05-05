@@ -1,24 +1,23 @@
 # Documentação dos módulos
 
-Este documento descreve os arquivos principais do projeto, suas responsabilidades e a relação entre os módulos da arquitetura MVC.
+Este documento descreve os arquivos principais do projeto, suas responsabilidades e a relação entre as camadas da arquitetura MVC.
 
 ## Visão geral
 
 | Módulo | Responsabilidade |
 |---|---|
 | `main.py` | inicialização da aplicação Qt |
-| `app/views/main_window.py` | construção da IHM, abas, estilos e gráficos |
-| `app/controllers/main_controller.py` | conexão entre eventos da IHM e funções do modelo |
-| `app/models/system_model.py` | identificação, sintonia PID, simulação e métricas |
-| `requirements.txt` | lista de dependências do projeto |
+| `app/views/main_window.py` | construção da IHM, abas, estilos, temas, cartões e gráficos |
+| `app/controllers/main_controller.py` | conexão entre eventos da IHM e rotinas matemáticas |
+| `app/models/identification.py` | identificação FOPDT pelo método de Smith, simulação FOPDT e cálculo de EQM |
+| `app/models/pid_tuning.py` | sintonia IMC, sintonia ITAE, aproximação de Padé, funções de transferência, simulações e métricas |
+| `requirements.txt` | dependências Python do projeto |
 
 ## `main.py`
 
-### Finalidade
+Arquivo de entrada da aplicação. Cria o objeto `QApplication`, configura suporte a DPI alto, instancia a janela principal e cria o controlador.
 
-Arquivo de entrada da aplicação. Ele cria o objeto `QApplication`, configura suporte a DPI alto, instancia a janela principal e cria o controlador.
-
-### Fluxo
+Fluxo principal:
 
 ```python
 app = QApplication(sys.argv)
@@ -28,108 +27,89 @@ view.show()
 sys.exit(app.exec_())
 ```
 
-### Responsabilidades
+## `app/models/identification.py`
 
-- iniciar a aplicação PyQt5;
-- configurar nome da aplicação e organização como Grupo 7;
-- criar a camada de visualização;
-- conectar a visualização ao controlador;
-- iniciar o loop de eventos Qt.
+Contém as rotinas de identificação do modelo FOPDT a partir da resposta ao degrau.
 
-## `app/models/system_model.py`
+### `identify_smith(t, u, y) -> dict`
 
-### Finalidade
-
-Contém a lógica matemática e numérica do projeto. Este módulo não depende da interface gráfica.
-
-### Funções principais
-
-#### `load_mat_file(filepath: str) -> dict`
-
-Carrega um arquivo `.mat` e extrai variáveis numéricas.
-
-Processamento aplicado:
-
-1. remove metadados internos do MATLAB;
-2. mantém apenas arrays numéricos;
-3. detecta vetor de tempo crescente;
-4. escolhe entrada e saída por heurística de variância;
-5. retorna arrays com mesmo comprimento.
-
-Retorno principal:
-
-```python
-{
-    'time': time,
-    'input': input_signal,
-    'output': output,
-    'time_key': time_key,
-    'input_key': input_key,
-    'output_key': output_key,
-    'all_keys': keys,
-}
-```
-
-#### `identify_smith(time, output, input_signal) -> dict`
-
-Identifica um modelo FOPDT pelo método de Smith:
+Identifica o modelo:
 
 $$
-G(s)=\frac{K e^{-\theta s}}{\tau s+1}
+G(s)=\frac{k e^{-\theta s}}{\tau s+1}
 $$
 
 Etapas executadas:
 
-1. detecta o instante do degrau na entrada;
-2. calcula valores médios antes do degrau e em regime permanente;
-3. calcula o ganho `K`;
-4. normaliza a resposta;
-5. interpola os tempos de 28,3% e 63,2%;
-6. estima `τ` e `θ`;
-7. simula o modelo FOPDT;
-8. calcula o indicador de erro exibido na IHM.
+1. converte `t`, `u` e `y` para arrays NumPy;
+2. detecta o instante do degrau pela primeira variação significativa em `u`;
+3. calcula `u0`, `u1`, `Δu`, `y0`, `y_inf` e `Δy`;
+4. calcula `k=Δy/Δu`;
+5. calcula os níveis de 28,3% e 63,2%;
+6. obtém `t1` e `t2` por interpolação linear;
+7. calcula `t1_rel` e `t2_rel` em relação ao instante do degrau;
+8. estima `τ` e `θ`;
+9. aplica proteções numéricas para `τ>0` e `θ>=0`;
+10. calcula o erro do modelo com `compute_eqm()`.
 
-Retorno principal:
+Campos de retorno:
 
 ```python
 {
-    'K': K,
-    'tau': tau,
-    'theta': theta,
-    'eqm': eqm,
-    'y_model': y_model,
-    'y_baseline': y_baseline,
-    'u_baseline': u_baseline,
-    'delta_u': delta_u,
-    't_step': t_step,
-    'method': 'Smith',
+    "k": k,
+    "tau": tau,
+    "theta": theta,
+    "t_step": t_step,
+    "u0": u0,
+    "u1": u1,
+    "y0": y0,
+    "y_inf": y_inf,
+    "t1": t1,
+    "t2": t2,
+    "t1_rel": t1_rel,
+    "t2_rel": t2_rel,
+    "eqm": eqm,
 }
 ```
 
-#### `_interp_time(time, y_norm, level)`
+### `simulate_fopdt(t, u, k, tau, theta, u0=0.0, y0=0.0)`
 
-Função auxiliar para interpolação linear. Retorna o tempo em que a resposta normalizada cruza determinado nível.
-
-$$
-t=t_1+\frac{level-y_1}{y_2-y_1}(t_2-t_1)
-$$
-
-#### `_simulate_fopdt(K, tau, theta, time, input_signal, y0, u0)`
-
-Simula a planta FOPDT usando integração de Euler com passo variável.
-
-Modelo usado:
+Simula o modelo FOPDT. Primeiro cria a parte sem atraso:
 
 $$
-\tau\frac{dy_d(t)}{dt}=K u_d(t-\theta)-y_d(t)
+G_0(s)=\frac{k}{\tau s+1}
 $$
 
-#### `tune_imc(K, tau, theta, lam) -> dict`
-
-Calcula os parâmetros PID pelo método IMC.
+Depois desloca a resposta simulada em número inteiro de amostras:
 
 $$
-K_p=\frac{2\tau+\theta}{K(2\lambda+\theta)}
+n_\theta=\operatorname{round}\left(\frac{\theta}{\Delta t}\right)
+$$
+
+A saída final é reconstruída por:
+
+$$
+y(t)=y_0+y_d(t)
+$$
+
+### `compute_eqm(t, u, y_real, k, tau, theta, u0=0.0, y0=0.0)`
+
+Calcula o erro quadrático médio:
+
+$$
+EQM=\frac{1}{N}\sum_{i=1}^{N}(\hat{y}_i-y_i)^2
+$$
+
+## `app/models/pid_tuning.py`
+
+Contém as rotinas de sintonia PID, montagem de funções de transferência, simulação e cálculo de métricas.
+
+### `tune_imc(k, tau, theta, lam=None)`
+
+Calcula os parâmetros PID pelo método IMC:
+
+$$
+K_p=\frac{2\tau+\theta}{k(2\lambda+\theta)}
 $$
 
 $$
@@ -140,204 +120,205 @@ $$
 T_d=\frac{\tau\theta}{2\tau+\theta}
 $$
 
-#### `tune_itae(K, tau, theta) -> dict`
+Quando `lam` não é informado, a função usa `λ=τ`.
 
-Calcula os parâmetros PID pelo método ITAE.
+### `tune_itae(k, tau, theta)`
 
-$$
-K_p=\frac{0,965}{K}\left(\frac{\theta}{\tau}\right)^{-0,85}
-$$
+Calcula os parâmetros PID pelo método ITAE:
 
 $$
-T_i=\frac{\tau}{0,796-0,147(\theta/\tau)}
+r=\frac{\theta}{\tau}
 $$
 
 $$
-T_d=0,308\tau\left(\frac{\theta}{\tau}\right)^{0,929}
+K_p=\frac{0,965}{k}r^{-0,85}
 $$
 
-#### `simulate_closed_loop(...) -> dict`
+$$
+T_i=\frac{\tau}{0,796-0,147r}
+$$
 
-Simula o sistema em malha fechada com controlador PID e planta FOPDT.
+$$
+T_d=0,308\tau r^{0,929}
+$$
 
-Recursos implementados:
+### `pade_approx(theta, order=2)`
 
-- atraso por `deque`;
-- integração por Euler;
-- filtro derivativo de primeira ordem;
-- saturação numérica de controle;
-- anti-windup por clamping do integrador;
-- cálculo automático de métricas.
+Retorna os polinômios da aproximação de Padé para o atraso.
 
-#### `simulate_open_loop(...) -> np.ndarray`
+Ordem 1:
 
-Executa a simulação em malha aberta usando o modelo FOPDT identificado.
+$$
+e^{-\theta s}\approx\frac{1-\frac{\theta}{2}s}{1+\frac{\theta}{2}s}
+$$
 
-#### `_compute_metrics(t, y, setpoint) -> dict`
+Ordem 2:
+
+$$
+e^{-\theta s}\approx
+\frac{\frac{\theta^2}{12}s^2-\frac{\theta}{2}s+1}
+{\frac{\theta^2}{12}s^2+\frac{\theta}{2}s+1}
+$$
+
+### `closed_loop_tf(k, tau, theta, Kp, Ti, Td, pade_order=2)`
+
+Monta a função de transferência de malha fechada:
+
+$$
+T(s)=\frac{C(s)G(s)}{1+C(s)G(s)}
+$$
+
+Para `Ti>0`, o controlador é:
+
+$$
+C(s)=K_p\left(1+\frac{1}{T_i s}+T_d s\right)
+$$
+
+Em forma racional:
+
+$$
+C(s)=\frac{K_pT_iT_ds^2+K_pT_is+K_p}{T_i s}
+$$
+
+A função retorna o sistema `TransferFunction` e os polos da malha fechada.
+
+### `open_loop_tf(k, tau, theta, pade_order=2)`
+
+Monta a função de transferência em malha aberta com atraso aproximado por Padé.
+
+### `is_stable(poles, tol=1e-9)`
+
+Verifica estabilidade pelo critério:
+
+$$
+\operatorname{Re}(p_i)<-tol,\quad \forall i
+$$
+
+### `simulate_closed_loop(k, tau, theta, Kp, Ti, Td, SP, t_sim, pade_order=2)`
+
+Simula a resposta ao setpoint em malha fechada usando `scipy.signal.lsim`.
+
+Retorno:
+
+```python
+t_out, y_out, estavel, poles
+```
+
+### `simulate_open_loop(...)`
+
+Simula a resposta em malha aberta para uma entrada constante `U_step`.
+
+### `response_metrics(t, y, SP)`
 
 Calcula:
 
-- `tr`: tempo de subida;
-- `ts`: tempo de acomodação;
-- `Mp`: sobressinal percentual;
-- `ess`: erro em regime permanente.
+| Campo | Descrição |
+|---|---|
+| `tr` | tempo de subida, entre 10% e 90% do valor final |
+| `ts` | último instante fora da banda de ±2% do valor final |
+| `Mp` | sobressinal percentual |
+| `ess` | erro em regime permanente |
+| `y_final` | valor final estimado pela média das últimas amostras |
+| `y_peak` | valor máximo da resposta |
+| `t_peak` | instante do valor máximo |
 
 ## `app/controllers/main_controller.py`
 
-### Finalidade
+Controla o fluxo da aplicação.
 
-Responsável por conectar a IHM com o modelo. O Controller recebe sinais emitidos pela View, executa funções do Model e atualiza os campos e gráficos da interface.
-
-### Atributos principais
+### Estado interno
 
 | Atributo | Conteúdo |
 |---|---|
-| `_data` | dataset carregado |
-| `_ident` | resultado da identificação FOPDT |
-| `_pid_params` | parâmetros PID calculados ou inseridos manualmente |
-| `_cl_result` | resultado da simulação em malha fechada |
+| `t` | vetor de tempo |
+| `u` | vetor de entrada |
+| `y` | vetor de saída |
+| `params` | parâmetros identificados pelo método de Smith |
+| `last_sim` | última simulação em malha fechada |
 
-### Métodos principais
+### Sinais conectados
 
-#### `_connect_signals()`
+| Origem | Sinal | Destino |
+|---|---|---|
+| `tab_ident` | `sig_load_file` | `load_dataset()` |
+| `tab_ident` | `sig_export` | `_export_ident()` |
+| `tab_pid` | `sig_tune` | `simulate_pid()` |
+| `tab_pid` | `sig_method_changed` | `_update_pid_from_method()` |
+| `tab_pid` | `sig_lambda_changed` | `_update_pid_from_method()` |
+| `tab_pid` | `sig_export` | `_export_pid()` |
+| `tab_graf` | `sig_compare` | `compare_plots()` |
+| `tab_graf` | `sig_export` | `_export_compare()` |
 
-Conecta botões e controles da interface aos métodos do Controller:
+### `load_dataset()`
 
-- carregar arquivo;
-- identificar sistema;
-- sintonizar PID;
-- exportar gráficos;
-- atualizar comparação.
+Abre o arquivo `.mat`, procura os vetores de tempo, entrada e saída, executa `identify_smith()` automaticamente e atualiza a IHM. A versão atual não usa um botão separado de identificação.
 
-#### `_on_load_file()`
+### `_plot_identification()`
 
-Abre uma janela de seleção de arquivo `.mat`, chama `load_mat_file()` e atualiza a aba de identificação.
+Plota os dados experimentais, o modelo FOPDT identificado e os pontos de 28,3% e 63,2%.
 
-#### `_plot_raw_data()`
+### `_update_pid_from_method()`
 
-Plota os dados originais do dataset, com saída em um eixo e entrada em eixo secundário.
+Recalcula `Kp`, `Ti` e `Td` sempre que o método automático ou o parâmetro `λ` são alterados. No modo manual, não altera os valores inseridos pelo usuário.
 
-#### `_on_identify()`
+### `simulate_pid()`
 
-Executa `identify_smith()`, atualiza os cartões de parâmetros FOPDT, habilita a aba de controle e sugere o setpoint como média final da saída.
+Monta a malha fechada, verifica estabilidade, simula a resposta ao setpoint e atualiza métricas e gráfico.
 
-#### `_plot_identification()`
+### `compare_plots()`
 
-Plota os dados reais e o modelo FOPDT identificado. Também marca o instante do degrau quando detectado.
+Gera dois gráficos:
 
-#### `_on_tune()`
+1. malha aberta com a amplitude de degrau original do experimento;
+2. malha fechada comparando IMC e ITAE para o mesmo setpoint e tempo de simulação.
 
-Executa a sintonia PID. O fluxo depende do modo selecionado:
+### `_export_compare()`
 
-- modo manual: lê `Kp`, `Ti` e `Td` da IHM;
-- modo automático IMC: chama `tune_imc()`;
-- modo automático ITAE: chama `tune_itae()`.
+Exporta dois arquivos: o gráfico de malha fechada e o gráfico de malha aberta com sufixo `_open_loop`.
 
-Em seguida, chama `simulate_closed_loop()` e atualiza as métricas.
+### `refresh_plots()`
 
-#### `_plot_closed_loop()`
-
-Plota a resposta em malha fechada, o setpoint e a faixa de ±2%.
-
-#### `_on_compare()`
-
-Atualiza a aba de comparação com dois gráficos:
-
-1. malha aberta: dados reais e modelo FOPDT;
-2. malha fechada: resposta controlada e setpoint.
-
-#### `_export_canvas()`
-
-Salva o gráfico atual em PNG, PDF ou SVG.
+Redesenha os gráficos com as cores do tema atual quando a IHM muda entre tema escuro e tema claro.
 
 ## `app/views/main_window.py`
 
-### Finalidade
+Define a IHM principal.
 
-Define todos os elementos visuais da IHM em PyQt5.
+### Elementos principais
 
-### Componentes principais
+| Classe | Função |
+|---|---|
+| `MplCanvas` | encapsula `FigureCanvas` e aplica estilo aos gráficos |
+| `ParamCard` | cartão usado para exibir valores numéricos |
+| `TabIdentificacao` | aba de carregamento, identificação e parâmetros FOPDT |
+| `TabControlePID` | aba de sintonia, setpoint, tempo de simulação e métricas |
+| `TabGraficos` | aba de comparação entre malha aberta e malha fechada |
+| `MainWindow` | janela principal com header, abas, status bar e alternância de tema |
 
-#### Paletas e estilo
+### Aba Identificação
 
-O módulo possui duas paletas:
+Exibe:
 
-- `DARK_PALETTE`;
-- `LIGHT_PALETTE`.
+- carregamento de dataset `.mat`;
+- parâmetros `k`, `τ`, `θ` e `EQM`;
+- informações do experimento: `u0`, `uf`, `y∞` e `t_d`;
+- gráfico da identificação por Smith.
 
-A função `_build_stylesheet()` gera a folha de estilo Qt usada pela aplicação.
+### Aba Controle PID
 
-#### `MplCanvas`
+Exibe:
 
-Classe que encapsula um `FigureCanvas` do Matplotlib para uso dentro do PyQt5.
+- modo automático ou manual;
+- seleção IMC/ITAE;
+- `Kp`, `Ti`, `Td`;
+- `λ`, habilitado somente quando aplicável;
+- `SP`;
+- `t_sim`;
+- métricas `tr`, `ts`, `Mp` e `ess`.
 
-Métodos principais:
+### Aba Gráficos
 
-- `_style_ax()`;
-- `apply_theme()`;
-- `clear_and_style()`.
+Exibe:
 
-#### `ParamCard`
-
-Widget visual usado para exibir parâmetros e métricas. É usado para `K`, `τ`, `θ`, `EQM`, `tr`, `ts`, `Mp` e `ess`.
-
-#### `TabIdentificacao`
-
-Aba responsável por:
-
-- seleção de arquivo `.mat`;
-- exibição dos parâmetros FOPDT;
-- botão de identificação;
-- botão de exportação;
-- gráfico de dados e modelo.
-
-Sinais emitidos:
-
-```python
-sig_load_file
-sig_identify
-sig_export
-```
-
-#### `TabControlePID`
-
-Aba responsável por:
-
-- seleção de modo automático ou manual;
-- seleção do método IMC ou ITAE;
-- campos de `Kp`, `Ti`, `Td` e `λ`;
-- campo de setpoint;
-- cartões de métricas;
-- gráfico da resposta em malha fechada.
-
-Sinais emitidos:
-
-```python
-sig_tune
-sig_export
-```
-
-#### `TabGraficos`
-
-Aba responsável pela comparação lado a lado entre malha aberta e malha fechada.
-
-Sinal emitido:
-
-```python
-sig_compare
-```
-
-#### `MainWindow`
-
-Janela principal da aplicação. Cria o cabeçalho, o botão de tema, as três abas e a barra de status.
-
-## `requirements.txt`
-
-Lista as dependências mínimas:
-
-```text
-PyQt5>=5.15.0
-numpy>=1.21.0
-scipy>=1.7.0
-matplotlib>=3.4.0
-```
+- gráfico de malha aberta, com resposta natural da planta;
+- gráfico de malha fechada, comparando IMC e ITAE.

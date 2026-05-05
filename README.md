@@ -1,56 +1,47 @@
 # C213 - PID Controller
 
-Projeto desenvolvido para a disciplina **C213 - Sistemas Embarcados**. A aplicação realiza identificação de sistemas em malha aberta, sintonia de controladores PID e comparação entre respostas em malha aberta e malha fechada por meio de uma IHM em Python.
+Projeto desenvolvido para a disciplina **C213 - Sistemas de Controle Automático**. A aplicação realiza identificação de uma planta em malha aberta, sintonia de controladores PID e comparação entre respostas em malha aberta e malha fechada por meio de uma IHM em Python.
 
 **Grupo:** 7  
-**Métodos de sintonia:** IMC e ITAE  
-**Arquitetura:** MVC, com separação entre modelo, controle e interface gráfica
+**Métodos de sintonia do grupo:** IMC e ITAE  
+**Arquitetura:** MVC, com separação entre interface, controlador e módulos matemáticos
 
 ## Integrantes
 
 | Nome | Matrícula |
-|---|---|
-| DAVÍ PADULA RABELO | |
-| KAUÃ VICTOR GARCIA SIÉCOLA | |
-| MATHEUS RENÓ TORRES | |
-
-## Sumário
-
-- [Objetivo](#objetivo)
-- [Funcionalidades](#funcionalidades)
-- [Estrutura do projeto](#estrutura-do-projeto)
-- [Instalação e execução](#instalação-e-execução)
-- [Fluxo de uso](#fluxo-de-uso)
-- [Modelo matemático](#modelo-matemático)
-- [Sintonia PID](#sintonia-pid)
-- [Métricas de desempenho](#métricas-de-desempenho)
-- [IHM e resultados](#ihm-e-resultados)
-- [Documentação dos módulos](#documentação-dos-módulos)
-- [Limitações e melhorias futuras](#limitações-e-melhorias-futuras)
+|---|---:|
+| DAVÍ PADULA RABELO | 1917 |
+| KAUÃ VICTOR GARCIA SIÉCOLA | 1887 |
+| MATHEUS RENÓ TORRES | 1954 |
 
 ## Objetivo
 
 O objetivo do projeto é integrar identificação de sistemas e controle PID em uma aplicação computacional capaz de:
 
 1. carregar datasets experimentais em formato `.mat`;
-2. identificar uma planta térmica por modelo FOPDT usando o método de Smith;
+2. identificar automaticamente uma planta por um modelo FOPDT usando o método de Smith;
 3. sintonizar controladores PID pelos métodos IMC e ITAE, definidos para o Grupo 7;
 4. simular a resposta em malha fechada para um setpoint configurável;
 5. calcular métricas de desempenho, como tempo de subida, tempo de acomodação, sobressinal e erro em regime permanente;
-6. visualizar e exportar gráficos da resposta do sistema.
+6. comparar a resposta natural da planta com as respostas controladas por IMC e ITAE;
+7. exportar os gráficos gerados pela IHM.
 
 ## Funcionalidades
 
 | Área | Funcionalidade |
 |---|---|
-| Dataset | Leitura de arquivos MATLAB `.mat` com variáveis numéricas |
-| Identificação | Detecção automática do degrau e identificação FOPDT pelo método de Smith |
-| Sintonia PID | Seleção automática entre IMC e ITAE ou edição manual de `Kp`, `Ti` e `Td` |
-| Simulação | Integração numérica da planta FOPDT com atraso e controlador PID |
-| Métricas | Cálculo de `tr`, `ts`, `Mp` e `ess` |
+| Dataset | Leitura de arquivos MATLAB `.mat` contendo tempo, entrada e saída |
+| Identificação | Identificação automática FOPDT pelo método de Smith logo após carregar o arquivo |
+| Experimento | Exibição de `u0`, `uf`, `y∞` e `t_d` na aba de identificação |
+| Sintonia PID | Cálculo automático por IMC ou ITAE e modo manual para `Kp`, `Ti` e `Td` |
+| Lambda | Campo `λ` habilitado para IMC e exibido como `N/A` para ITAE |
+| Simulação | Uso de funções de transferência e `scipy.signal.lsim` |
+| Atraso | Aproximação de Padé para o atraso de transporte nas simulações em função de transferência |
+| Estabilidade | Verificação dos polos da malha fechada antes da simulação |
+| Métricas | Cálculo de `tr`, `ts`, `Mp`, `ess`, valor final, pico e tempo de pico |
 | Visualização | Gráficos interativos com Matplotlib integrado ao PyQt5 |
-| Comparação | Visualização lado a lado de malha aberta e malha fechada |
-| Exportação | Salvamento de gráficos em PNG, PDF ou SVG |
+| Comparação | Gráficos lado a lado: malha aberta e IMC × ITAE |
+| Exportação | Salvamento de gráficos em PNG ou PDF |
 | Interface | Tema escuro e tema claro com botão de alternância |
 
 ## Estrutura do projeto
@@ -63,7 +54,8 @@ C213/
 │  │  └─ main_controller.py
 │  ├─ models/
 │  │  ├─ __init__.py
-│  │  └─ system_model.py
+│  │  ├─ identification.py
+│  │  └─ pid_tuning.py
 │  └─ views/
 │     ├─ __init__.py
 │     └─ main_window.py
@@ -72,33 +64,36 @@ C213/
 │  ├─ MATEMATICA_CONTROLE.md
 │  ├─ MODULOS.md
 │  └─ img/
-│     ├─ fig_01_estrutura_projeto.png
-│     ├─ fig_02_identificacao_smith.png
-│     ├─ fig_03_controle_pid_imc.png
-│     ├─ fig_04_comparacao_imc.png
-│     ├─ fig_05_controle_pid_itae.png
-│     └─ fig_06_comparacao_itae.png
+│     ├─ figura_01_identificacao_smith.png
+│     ├─ figura_02_controle_pid_imc.png
+│     ├─ figura_03_comparacao_imc.png
+│     ├─ figura_04_controle_pid_itae.png
+│     └─ figura_05_comparacao_itae.png
 ├─ main.py
 ├─ requirements.txt
 ├─ README.md
 └─ .gitignore
 ```
 
-- **Model:** contém carregamento de dados, identificação FOPDT, sintonia PID, simulação e métricas.
-- **View:** contém a IHM em PyQt5, abas, campos, botões, gráficos e estilos.
-- **Controller:** conecta eventos da interface aos algoritmos do modelo.
-- **main:** cria a aplicação Qt, instancia a View e conecta o Controller.
+| Camada | Arquivos | Responsabilidade |
+|---|---|---|
+| View | `app/views/main_window.py` | IHM, abas, campos, botões, cartões, temas e gráficos |
+| Controller | `app/controllers/main_controller.py` | Carregamento de dados, conexão entre eventos da IHM e funções matemáticas, atualização dos gráficos |
+| Model | `app/models/identification.py` e `app/models/pid_tuning.py` | Identificação FOPDT, sintonia PID, funções de transferência, simulação e métricas |
+| Entrada | `main.py` | Inicialização do `QApplication`, criação da janela principal e criação do Controller |
 
 ## Instalação e execução
 
 ### 1. Criar ambiente virtual
+
+Linux ou macOS:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-No Windows:
+Windows PowerShell:
 
 ```powershell
 python -m venv .venv
@@ -134,100 +129,107 @@ sudo apt install libxcb-cursor0 libxcb-xinerama0 libxkbcommon-x11-0
 QT_QPA_PLATFORM=xcb python3 main.py
 ```
 
+## Formato esperado do dataset
+
+O arquivo `.mat` deve conter três vetores principais:
+
+| Grandeza | Nomes aceitos pelo código |
+|---|---|
+| Tempo | `tiempo`, `tempo`, `t`, `time` |
+| Entrada | `entrada`, `u`, `input` |
+| Saída | `salida`, `saida`, `y`, `output` |
+
+Após o carregamento, o programa executa a identificação automaticamente. Não há botão separado de identificação na versão atual.
+
 ## Fluxo de uso
 
 1. Abrir a aba **Identificação**.
 2. Clicar em **Escolher Arquivo .mat**.
 3. Selecionar o dataset experimental.
-4. Clicar em **Identificar**.
-5. Verificar os parâmetros FOPDT identificados: `K`, `τ`, `θ` e indicador de erro.
-6. Abrir a aba **Controle PID**.
-7. Selecionar o método de sintonia: **IMC** ou **ITAE**.
-8. Ajustar o setpoint, quando necessário.
-9. Clicar em **Sintonizar**.
-10. Analisar a resposta em malha fechada e as métricas.
-11. Abrir a aba **Gráficos** e clicar em **Atualizar Comparação**.
-12. Exportar os gráficos, se necessário.
+4. Aguardar a identificação automática pelo método de Smith.
+5. Verificar os parâmetros FOPDT: `k`, `τ`, `θ` e `EQM`.
+6. Verificar os dados do experimento: `u0`, `uf`, `y∞` e `t_d`.
+7. Abrir a aba **Controle PID**.
+8. Escolher **IMC**, **ITAE** ou modo **Manual**.
+9. Ajustar `SP`, `t_sim` e, no caso do IMC, `λ`.
+10. Clicar em **Sintonizar**.
+11. Analisar a resposta em malha fechada e as métricas.
+12. Abrir a aba **Gráficos** e clicar em **Atualizar Comparação**.
+13. Exportar os gráficos, se necessário.
 
 ## Modelo matemático
 
-A planta é aproximada por um modelo FOPDT, isto é, um sistema de primeira ordem com atraso:
+A planta é aproximada por um modelo FOPDT:
 
 $$
-G(s)=\frac{K e^{-\theta_s}}{\tau_s+1}
+G(s)=\frac{k e^{-\theta s}}{\tau s+1}
 $$
 
-Em variáveis de desvio, a dinâmica simulada é:
+em que `k` é o ganho estático, `τ` é a constante de tempo e `θ` é o atraso de transporte.
+
+## Identificação pelo método de Smith
+
+O ganho estático é calculado por:
 
 $$
-\tau \frac{dy_d(t)}{dt}=K u_d(t-\theta)-y_d(t)
+k=\frac{\Delta y}{\Delta u}
 $$
 
 com:
 
 $$
-y(t)=y_0+y_d(t)
-$$
-
-em que:
-
-- `K` é o ganho estático do processo;
-- `τ` é a constante de tempo;
-- `θ` é o atraso de transporte;
-- `u_d(t)` é a entrada em variável de desvio;
-- `y_d(t)` é a saída em variável de desvio.
-
-### Identificação pelo método de Smith
-
-O método implementado usa os pontos normalizados de 28,3% e 63,2% da resposta ao degrau.
-
-O ganho é calculado por:
-
-$$
-K=\frac{\Delta y}{\Delta u}
-$$
-
-A saída normalizada é:
-
-$$
-y_N(t)=\frac{y(t)-y_0}{\Delta y}
-$$
-
-A partir de `y_N(t)`, obtêm-se:
-
-$$
-y_N(t_1)=0,283
+\Delta u=u_f-u_0
 $$
 
 $$
-y_N(t_2)=0,632
+\Delta y=y_{\infty}-y_0
 $$
 
-Os parâmetros do modelo são estimados por:
+Os pontos característicos são:
 
 $$
-\tau=1,5(t_2-t_1)
+y_{28,3}=y_0+0,283\Delta y
 $$
 
 $$
-\theta=(t_2-\tau)-t_{degrau}
+y_{63,2}=y_0+0,632\Delta y
 $$
 
-O indicador de erro exibido na interface é calculado no código como raiz do erro quadrático médio:
+Após encontrar `t1` e `t2`, são calculados os tempos relativos ao instante do degrau:
 
 $$
-EQM_{app}=\sqrt{\frac{1}{N}\sum_{i=1}^{N}\left(y_i-\hat{y}_i\right)^2}
+t_{1,rel}=t_1-t_d
+$$
+
+$$
+t_{2,rel}=t_2-t_d
+$$
+
+Os parâmetros do modelo são:
+
+$$
+\tau=1,5(t_{2,rel}-t_{1,rel})
+$$
+
+$$
+\theta=t_{2,rel}-\tau
+$$
+
+O indicador exibido como `EQM` é o erro quadrático médio:
+
+$$
+EQM=\frac{1}{N}\sum_{i=1}^{N}(\hat{y}_i-y_i)^2
 $$
 
 ## Sintonia PID
 
-O controlador PID é representado por:
+A lei contínua de referência do controlador PID é:
 
 $$
-u(t)=K_p\left[e(t)+\frac{1}{T_i}\int e(t)dt+T_d\frac{de(t)}{dt}\right]
+u(t)=K_p\left[e(t)+\frac{1}{T_i}\int_0^t e(\xi)d\xi+T_d\frac{de(t)}{dt}\right]
 $$
 
-em que:
+com:
 
 $$
 e(t)=SP-y(t)
@@ -235,12 +237,8 @@ $$
 
 ### Método IMC
 
-O método IMC usa o parâmetro `λ` para ajustar o compromisso entre rapidez e robustez. Valores menores de `λ` tendem a gerar respostas mais rápidas, porém mais sensíveis a ruído e incertezas. Valores maiores tornam a resposta mais lenta e mais robusta.
-
-A implementação usa:
-
 $$
-K_p=\frac{2\tau+\theta}{K(2\lambda+\theta)}
+K_p=\frac{2\tau+\theta}{k(2\lambda+\theta)}
 $$
 
 $$
@@ -253,116 +251,89 @@ $$
 
 ### Método ITAE
 
-O método ITAE busca reduzir o erro absoluto ponderado pelo tempo:
+O critério ITAE é:
 
 $$
-ITAE=\int_0^\infty t |e(t)| dt
+ITAE=\int_0^{\infty}t|e(t)|dt
 $$
 
 A implementação usa:
 
 $$
-K_p=\frac{0,965}{K}\left(\frac{\theta}{\tau}\right)^{-0,85}
+r=\frac{\theta}{\tau}
 $$
 
 $$
-T_i=\frac{\tau}{0,796-0,147\left(\frac{\theta}{\tau}\right)}
+K_p=\frac{0,965}{k}r^{-0,85}
 $$
 
 $$
-T_d=0,308\tau\left(\frac{\theta}{\tau}\right)^{0,929}
+T_i=\frac{\tau}{0,796-0,147r}
 $$
+
+$$
+T_d=0,308\tau r^{0,929}
+$$
+
+## Simulação e estabilidade
+
+O atraso é aproximado por Padé antes da montagem das funções de transferência. A malha fechada é:
+
+$$
+T(s)=\frac{C(s)G(s)}{1+C(s)G(s)}
+$$
+
+A estabilidade é avaliada pelos polos da malha fechada:
+
+$$
+\operatorname{Re}(p_i)<0
+$$
+
+Se a malha fechada estiver instável no modo manual, a simulação é bloqueada. Em modo automático, a IHM emite aviso.
 
 ## Métricas de desempenho
 
-As métricas calculadas para a resposta ao degrau em malha fechada são:
-
 | Métrica | Símbolo | Definição |
 |---|---:|---|
-| Tempo de subida | `tr` | diferença entre os instantes em que a resposta cruza 10% e 90% do setpoint |
-| Tempo de acomodação | `ts` | primeiro instante após o qual a resposta permanece na faixa de ±2% do setpoint |
-| Sobressinal | `Mp` | percentual máximo acima do setpoint |
-| Erro em regime permanente | `ess` | módulo da diferença entre o setpoint e a média final da resposta |
-
-$$
-t_r=t_{90\%}-t_{10\%}
-$$
-
-$$
-M_p=\frac{y_{max}-SP}{SP}\cdot 100\%
-$$
-
-$$
-ess=\left|SP-\bar{y}_{final}\right|
-$$
+| Tempo de subida | `tr` | diferença entre os instantes de 10% e 90% do valor final |
+| Tempo de acomodação | `ts` | último instante fora da banda de ±2% do valor final |
+| Sobressinal | `Mp` | pico acima do valor final, em percentual |
+| Erro em regime permanente | `ess` | diferença entre setpoint e valor final |
 
 ## IHM e resultados
 
-### Aba de Identificação
+### Figura 1 - Identificação por Smith
 
-A aba **Identificação** permite carregar o dataset `.mat`, executar o método de Smith e visualizar a comparação entre dados reais e modelo FOPDT. No exemplo mostrado, a identificação resultou aproximadamente em:
+![Figura 1 - Identificação por Smith](docs/assets/figura_01_identificacao_smith.png)
 
-| Parâmetro | Valor aproximado |
-|---|---:|
-| `K` | 0,8047 |
-| `τ` | 31,7317 |
-| `θ` | 8,7289 |
-| `EQM_app` | 3,17543 |
+A Figura 1 mostra a aba **Identificação**, com carregamento do dataset, parâmetros FOPDT, dados do experimento e gráfico com os pontos de 28,3% e 63,2% usados pelo método de Smith.
 
-**Figura 1: Aba Identificação com modelo FOPDT obtido pelo método de Smith.**
+### Figura 2 - Controle PID com IMC
 
-![Figura 1: Aba Identificação com modelo FOPDT obtido pelo método de Smith](docs/assets/figura_01_identificacao_smith.png)
+![Figura 2 - Controle PID com IMC](docs/assets/figura_02_controle_pid_imc.png)
 
-### Aba Controle PID com IMC
+A Figura 2 mostra a resposta em malha fechada usando sintonia IMC. O campo `λ` permanece habilitado por ser o parâmetro de projeto do método.
 
-A aba **Controle PID** permite selecionar o método automático, configurar o setpoint e visualizar a resposta em malha fechada. Para o método IMC, o parâmetro `λ` permanece associado à robustez da resposta.
+### Figura 3 - Comparação com IMC
 
-**Figura 2: Aba Controle PID com sintonia IMC.**
+![Figura 3 - Comparação com IMC](docs/assets/figura_03_comparacao_imc.png)
 
-![Figura 2: Aba Controle PID com sintonia IMC](docs/assets/figura_02_controle_pid_imc.png)
+A Figura 3 mostra a aba **Gráficos**, com a resposta natural em malha aberta e a comparação das respostas em malha fechada.
 
-### Comparação com IMC
+### Figura 4 - Controle PID com ITAE
 
-A aba **Gráficos** compara a resposta em malha aberta identificada com a resposta em malha fechada usando o controlador sintonizado.
+![Figura 4 - Controle PID com ITAE](docs/assets/figura_04_controle_pid_itae.png)
 
-**Figura 3: Comparação entre malha aberta e malha fechada com IMC.**
+A Figura 4 mostra a resposta em malha fechada usando sintonia ITAE. Nesse método, o campo `λ` aparece como `N/A`.
 
-![Figura 3: Comparação entre malha aberta e malha fechada com IMC](docs/assets/figura_03_comparacao_imc.png)
+### Figura 5 - Comparação com ITAE
 
-### Aba Controle PID com ITAE
+![Figura 5 - Comparação com ITAE](docs/assets/figura_05_comparacao_itae.png)
 
-No método ITAE, o parâmetro `λ` não é utilizado e aparece como `N/A`. O sistema calcula automaticamente `Kp`, `Ti` e `Td` com base no modelo identificado.
+A Figura 5 mostra a comparação após seleção do método ITAE, mantendo a visualização entre malha aberta e malha fechada.
 
-**Figura 4: Aba Controle PID com sintonia ITAE.**
+## Documentação complementar
 
-![Figura 4: Aba Controle PID com sintonia ITAE](docs/assets/figura_04_controle_pid_itae.png)
-
-### Comparação com ITAE
-
-A comparação com ITAE permite verificar graficamente o comportamento da sintonia alternativa definida para o Grupo 7.
-
-**Figura 5: Comparação entre malha aberta e malha fechada com ITAE.**
-
-![Figura 5: Comparação entre malha aberta e malha fechada com ITAE](docs/assets/figura_05_comparacao_itae.png)
-
-## Documentação dos módulos
-
-A documentação detalhada está organizada nos arquivos abaixo:
-
-- [`docs/MODULOS.md`](docs/MODULOS.md): descrição técnica dos arquivos, classes e funções.
-- [`docs/MATEMATICA_CONTROLE.md`](docs/MATEMATICA_CONTROLE.md): detalhamento matemático da identificação, sintonia e simulação.
-- [`docs/GUIA_USO.md`](docs/GUIA_USO.md): roteiro de uso da IHM e interpretação dos resultados.
-
-## Limitações e melhorias futuras
-
-- A seleção das variáveis de entrada e saída do `.mat` é feita por heurística de variância.
-- A identificação por Smith é sensível a ruído e respostas não monotônicas.
-- O modelo usado para simulação é FOPDT, portanto dinâmicas de ordem superior são aproximadas.
-- A simulação usa integração numérica por Euler, suficiente para análise didática, mas não substitui uma análise industrial validada.
-- O projeto pode ser ampliado com outros métodos de sintonia, validação de estabilidade mais rigorosa, seleção manual das variáveis do dataset e geração automática de relatório.
-
-## Referências conceituais
-
-- C. L. Smith, *Digital Computer Process Control*, 1972.
-- D. E. Rivera, M. Morari e S. Skogestad, *Internal Model Control: PID Controller Design*, 1986.
-- D. E. Seborg, T. F. Edgar e D. A. Mellichamp, *Process Dynamics and Control*, 2016.
+- [`docs/MODULOS.md`](docs/MODULOS.md): documentação técnica dos módulos.
+- [`docs/MATEMATICA_CONTROLE.md`](docs/MATEMATICA_CONTROLE.md): fórmulas usadas na identificação, sintonia, simulação e métricas.
+- [`docs/GUIA_USO.md`](docs/GUIA_USO.md): roteiro operacional da IHM.
